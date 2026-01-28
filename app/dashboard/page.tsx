@@ -23,7 +23,7 @@ const createSupabaseServerClient = async () => {
   );
 };
 
-export default async function Home() {
+export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -33,14 +33,24 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const { count, error } = await supabase
+  const { data: userCards } = await supabase
     .from("user_cards")
-    .select("id", { count: "exact", head: true })
+    .select("cards_catalog(name)")
     .eq("user_id", user.id);
 
-  if (error || !count) {
-    redirect("/onboarding/cards");
-  }
+  const cardNames = (userCards ?? [])
+    .map((card) => card.cards_catalog?.name)
+    .filter((name): name is string => Boolean(name));
 
-  redirect("/dashboard");
+  return (
+    <main>
+      <h1>Your Cards</h1>
+      <ul>
+        {cardNames.map((name) => (
+          <li key={name}>{name}</li>
+        ))}
+      </ul>
+      <p>Benefits tracking coming next</p>
+    </main>
+  );
 }
