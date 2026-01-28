@@ -1,30 +1,17 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createClient } from "@/utils/supabase/server";
 
-const createSupabaseServerClient = async () => {
-  const cookieStore = await cookies();
-
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
+type Card = {
+  id: string;
+  issuer: string;
+  brand: string | null;
+  card_name: string;
+  network: string;
 };
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -33,24 +20,62 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { data: userCards } = await supabase
+  const { data, error } = await supabase
     .from("user_cards")
-    .select("cards_catalog(name)")
+    .select(
+      `
+      card_id,
+      cards (
+        id,
+        issuer,
+        brand,
+        card_name,
+        network
+      )
+    `
+    )
     .eq("user_id", user.id);
 
-  const cardNames = (userCards ?? [])
-    .map((card) => card.cards_catalog?.name)
-    .filter((name): name is string => Boolean(name));
+  if (error) {
+    // Fail loud for now; you can make this nicer later
+    throw new Error(error.message);
+  }
+
+  const cards: Card[] = (data ?? [])
+    .map((row: any) => row.cards)
+    .filter(Boolean);
 
   return (
-    <main>
-      <h1>Your Cards</h1>
-      <ul>
-        {cardNames.map((name) => (
-          <li key={name}>{name}</li>
-        ))}
-      </ul>
-      <p>Benefits tracking coming next</p>
+    <main className="min-h-screen p-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <p className="text-sm text-gray-600 mt-2">
+        Signed in as {user.email ?? "your account"}
+      </p>
+
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold">Your cards</h2>
+
+        {cards.length === 0 ? (
+          <p className="text-sm text-gray-600 mt-3">
+            You haven’t added any cards yet.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {cards.map((card) => (
+              <li
+                key={card.id}
+                className="rounded-xl border p-4 flex flex-col gap-1"
+              >
+                <span className="text-sm font-medium">{card.card_name}</span>
+                <span className="text-xs text-gray-500">
+                  {card.issuer}
+                  {card.brand ? ` • ${card.brand}` : ""} • {card.network}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }
