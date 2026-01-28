@@ -14,10 +14,21 @@ export const createClient = () => {
     },
     cookies: {
       getAll() {
-        return cookieStore.getAll();
+        if (typeof cookieStore.getAll === "function") {
+          return cookieStore.getAll();
+        }
+
+        // Next.js cookies() may not implement getAll(); fall back to the
+        // iterable cookieStore and normalize to { name, value } entries.
+        return Array.from(cookieStore).map((cookie) => ({
+          name: cookie.name,
+          value: cookie.value,
+        }));
       },
-      setAll() {
-        // Server Components can read cookies but cannot set them.
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set?.({ name, value, ...options });
+        });
       },
     },
   });
@@ -33,7 +44,15 @@ export const createRouteHandlerClient = (
     },
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        if (typeof request.cookies.getAll === "function") {
+          return request.cookies.getAll();
+        }
+
+        // Next.js request cookies may not support getAll(); normalize iterable entries.
+        return Array.from(request.cookies).map((cookie) => ({
+          name: cookie.name,
+          value: cookie.value,
+        }));
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
