@@ -32,12 +32,16 @@ export default function LoginPage() {
         </p>
 
         <button
-          onClick={signInWithGoogle}
-          disabled={loading}
-          className="mt-6 w-full rounded-xl bg-black text-white py-3 text-sm font-medium disabled:opacity-60"
-        >
-          {loading ? "Signing in…" : "Continue with Google"}
-        </button>
+  type="button"
+  onClick={signInWithGoogle}
+  disabled={loading}
+  className="mt-6 w-full rounded-xl bg-black text-white py-3 text-sm font-medium disabled:opacity-60"
+>
+  {loading ? "Signing in with Google..." : "Continue with Google"}
+</button>
+
+
+
       </div>
     </main>
   );

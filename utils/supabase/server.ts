@@ -5,22 +5,17 @@ import type { NextRequest, NextResponse } from "next/server";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const createClient = () => {
-  const cookieStore = cookies();
+export const createClient = async () => {
+  const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      flowType: "pkce",
-    },
+    auth: { flowType: "pkce" },
     cookies: {
       getAll() {
-        if (typeof cookieStore.getAll === "function") {
-          return cookieStore.getAll();
+        if (typeof (cookieStore as any).getAll === "function") {
+          return (cookieStore as any).getAll();
         }
-
-        // Next.js cookies() may not implement getAll(); fall back to the
-        // iterable cookieStore and normalize to { name, value } entries.
-        return Array.from(cookieStore).map((cookie) => ({
+        return Array.from(cookieStore as any).map((cookie: any) => ({
           name: cookie.name,
           value: cookie.value,
         }));
@@ -33,6 +28,7 @@ export const createClient = () => {
     },
   });
 };
+
 
 export const createRouteHandlerClient = (
   request: NextRequest,

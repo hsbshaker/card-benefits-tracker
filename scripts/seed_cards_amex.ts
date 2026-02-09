@@ -133,7 +133,7 @@ const main = async () => {
     );
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey, {
+  const supabase = await createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false },
   });
 
