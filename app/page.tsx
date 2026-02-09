@@ -13,6 +13,7 @@ const fadeUp = {
   }),
 };
 
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#0B1220] text-white selection:bg-[#F7C948]/30 selection:text-white">
