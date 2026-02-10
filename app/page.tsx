@@ -36,14 +36,14 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/app"
+              href="/login"
               className="hidden sm:inline-flex items-center justify-center rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
             >
               See it in action
             </Link>
 
             <Link
-              href="/app"
+              href="/login"
               className="inline-flex items-center justify-center rounded-xl bg-[#7FB6FF] px-4 py-2 text-sm font-semibold text-[#08111F] shadow-[0_10px_35px_-15px_rgba(127,182,255,0.7)] hover:brightness-110 active:brightness-95 transition"
             >
               Continue with Google
@@ -83,7 +83,7 @@ export default function LandingPage() {
               className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"
             >
               <Link
-                href="/app"
+                href="/login"
                 className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-[#7FB6FF] px-6 py-3 text-sm font-semibold text-[#08111F] shadow-[0_16px_45px_-18px_rgba(127,182,255,0.75)] hover:brightness-110 active:brightness-95 transition"
               >
                 Sign in with Google
@@ -152,7 +152,7 @@ export default function LandingPage() {
 
           <div className="mt-6">
             <Link
-              href="/app"
+              href="/login"
               className="inline-flex items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
             >
               Get started →
