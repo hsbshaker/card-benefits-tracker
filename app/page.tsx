@@ -102,7 +102,7 @@ export default function LandingPage() {
 
         <section className="mt-10">
           {/* Trust tiles */}
-          <div className="grid gap-3">
+          <div className="grid gap-4 md:grid-cols-3">
             <TrustCard
               title="Free forever — seriously."
               body="No subscriptions, no paywalls — this stays free."
@@ -152,17 +152,14 @@ function TrustCard({
   icon: ReactNode;
 }) {
   return (
-    <div className="group relative rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition-all duration-300 hover:border-[#F7C948]/40 hover:bg-[#F7C948]/10">
-      <div className="flex items-start gap-3">
-        {/* icon container: BLUE by default, YELLOW on hover */}
-        <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#7FB6FF]/15 text-[#7FB6FF] transition-colors duration-300 group-hover:bg-[#F7C948]/20 group-hover:text-[#F7C948]">
+    <div className="group relative flex h-full flex-col rounded-3xl border border-white/15 bg-white/8 p-6 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.95)] backdrop-blur-md transition-all duration-300 hover:border-[#F7C948]/40 hover:bg-[#F7C948]/10 hover:shadow-[0_24px_60px_-34px_rgba(247,201,72,0.5)]">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-[#7FB6FF]/15 text-[#7FB6FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-colors duration-300 group-hover:border-[#F7C948]/35 group-hover:bg-[#F7C948]/20 group-hover:text-[#F7C948]">
           {icon}
-        </span>
+      </span>
 
-        <div>
-          <div className="text-sm font-semibold text-white/90">{title}</div>
-          <div className="mt-1 text-sm text-white/65">{body}</div>
-        </div>
+      <div className="mt-6 space-y-2.5">
+        <div className="text-lg font-bold leading-tight text-white/95">{title}</div>
+        <div className="text-sm leading-relaxed text-white/65">{body}</div>
       </div>
     </div>
   );
@@ -172,7 +169,7 @@ function TrustCard({
 
 function IconSpark() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden="true">
       <path d="M12 2l1.2 6.2L20 12l-6.8 3.8L12 22l-1.2-6.2L4 12l6.8-3.8L12 2z" />
     </svg>
   );
@@ -180,7 +177,7 @@ function IconSpark() {
 
 function IconShield() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden="true">
       <path d="M12 2l8 4v6c0 5.2-3.4 9.9-8 10-4.6-.1-8-4.8-8-10V6l8-4z" />
       <path
         d="M8.5 12.5l2.2 2.2 4.8-5.1"
@@ -195,7 +192,7 @@ function IconShield() {
 
 function IconWallet() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden="true">
       <path d="M4 7.5C4 6.1 5.1 5 6.5 5H18c1.1 0 2 .9 2 2v1H7.2c-1.8 0-3.2 1.4-3.2 3.2V7.5z" />
       <path
         d="M20 10v7c0 1.1-.9 2-2 2H6.5C5.1 19 4 17.9 4 16.5V12.2C4 10.4 5.4 9 7.2 9H20z"
