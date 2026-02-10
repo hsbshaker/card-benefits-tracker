@@ -4,7 +4,8 @@ import { createClient } from "@/utils/supabase/server";
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/dashboard";
+  const nextParam = url.searchParams.get("next");
+  const next = nextParam?.startsWith("/") ? nextParam : "/onboarding/cards";
 
   const errorRedirect = NextResponse.redirect(new URL("/login", request.url));
 
