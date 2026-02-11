@@ -302,11 +302,15 @@ export function WalletBuilder() {
     addCardInstance(card);
   };
 
+  const addDuplicateInstance = (card: CardResult) => {
+    addCardInstance(card);
+    setPendingDuplicate(null);
+    setDuplicateToast({ message: `Added another ${card.card_name}.` });
+  };
+
   const confirmDuplicateAdd = () => {
     if (!pendingDuplicate) return;
-    addCardInstance(pendingDuplicate.card);
-    setPendingDuplicate(null);
-    setDuplicateToast({ message: `Added another ${pendingDuplicate.card.card_name}.` });
+    addDuplicateInstance(pendingDuplicate.card);
   };
 
   const removeCardInstance = (instanceId: string) => {
@@ -538,10 +542,10 @@ export function WalletBuilder() {
                                 <span className="text-xs text-slate-400">In wallet</span>
                                 <button
                                   type="button"
-                                  onClick={() => attemptAddCard(card)}
+                                  onClick={() => addDuplicateInstance(card)}
                                   className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
                                 >
-                                  Add another
+                                  Add Another
                                 </button>
                               </div>
                             ) : (
