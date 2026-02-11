@@ -6,6 +6,7 @@ type IssuerOption = {
   id: string;
   name: string;
   enabled: boolean;
+  kind: "issuer" | "more";
 };
 
 type CardResult = {
@@ -23,12 +24,16 @@ type SelectedCardInstance = {
   issuer: string;
 };
 
+type DuplicateToastState = {
+  card: CardResult;
+};
+
 const ISSUER_OPTIONS: IssuerOption[] = [
-  { id: "amex", name: "American Express", enabled: true },
-  { id: "chase", name: "Chase", enabled: false },
-  { id: "citi", name: "Citi", enabled: false },
-  { id: "capital-one", name: "Capital One", enabled: false },
-  { id: "bilt", name: "Bilt", enabled: false },
+  { id: "amex", name: "American Express", enabled: true, kind: "issuer" },
+  { id: "chase", name: "Chase", enabled: false, kind: "issuer" },
+  { id: "capital-one", name: "Capital One", enabled: false, kind: "issuer" },
+  { id: "citi", name: "Citi", enabled: false, kind: "issuer" },
+  { id: "more", name: "More", enabled: true, kind: "more" },
 ];
 
 const rowTransition = "transition duration-150 ease-out";
@@ -41,11 +46,27 @@ export function WalletBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCards, setSelectedCards] = useState<SelectedCardInstance[]>([]);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [duplicateToast, setDuplicateToast] = useState<DuplicateToastState | null>(null);
 
   const requestAbortRef = useRef<AbortController | null>(null);
+  const moreContainerRef = useRef<HTMLDivElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
   const canSearch = activeIssuer === "amex";
   const normalizedQuery = query.trim();
   const shouldShowResults = canSearch && normalizedQuery.length >= 1;
+
+  const resetSearchState = () => {
+    setQuery("");
+    setResults([]);
+    setError(null);
+    setHighlightedIndex(0);
+    setIsLoading(false);
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+  };
 
   useEffect(() => {
     if (!shouldShowResults) {
@@ -99,7 +120,76 @@ export function WalletBuilder() {
     };
   }, [normalizedQuery, shouldShowResults]);
 
-  const addCard = (card: CardResult) => {
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!moreContainerRef.current?.contains(target)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMoreMenuOpen(false);
+        moreButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isMoreMenuOpen]);
+
+  useEffect(() => {
+    if (isMoreMenuOpen) {
+      window.setTimeout(() => {
+        moreMenuRef.current?.focus();
+      }, 0);
+    }
+  }, [isMoreMenuOpen]);
+
+  useEffect(() => {
+    if (!duplicateToast) return;
+
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setDuplicateToast(null);
+      toastTimeoutRef.current = null;
+    }, 4000);
+
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, [duplicateToast]);
+
+  useEffect(() => {
+    if (!duplicateToast) return;
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDuplicateToast(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [duplicateToast]);
+
+  const addCardInstance = (card: CardResult) => {
     const instanceId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -117,8 +207,61 @@ export function WalletBuilder() {
     ]);
   };
 
+  const attemptAddCard = (card: CardResult) => {
+    const hasDuplicate = selectedCards.some((selected) => selected.cardId === card.id);
+    resetSearchState();
+
+    if (hasDuplicate) {
+      setDuplicateToast({ card });
+      return;
+    }
+
+    addCardInstance(card);
+  };
+
+  const confirmDuplicateAdd = () => {
+    if (!duplicateToast) return;
+    addCardInstance(duplicateToast.card);
+    setDuplicateToast(null);
+  };
+
   const removeCardInstance = (instanceId: string) => {
     setSelectedCards((prev) => prev.filter((card) => card.instanceId !== instanceId));
+  };
+
+  const handleIssuerClick = (issuer: IssuerOption) => {
+    if (!issuer.enabled || issuer.kind !== "issuer") {
+      return;
+    }
+
+    setIsMoreMenuOpen(false);
+
+    if (activeIssuer === issuer.id) {
+      setActiveIssuer(null);
+      resetSearchState();
+      return;
+    }
+
+    setActiveIssuer(issuer.id);
+    resetSearchState();
+  };
+
+  const handleMoreButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setIsMoreMenuOpen((prev) => !prev);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsMoreMenuOpen(false);
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsMoreMenuOpen(true);
+    }
   };
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -139,7 +282,9 @@ export function WalletBuilder() {
     if (event.key === "Enter") {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
-      if (highlighted) addCard(highlighted);
+      if (highlighted) {
+        attemptAddCard(highlighted);
+      }
     }
   };
 
@@ -157,33 +302,65 @@ export function WalletBuilder() {
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-            <div className="mb-4 flex flex-wrap gap-2">
-              {ISSUER_OPTIONS.map((issuer) => {
-                const isActive = activeIssuer === issuer.id;
+            <div className="mb-4 overflow-x-auto pb-1">
+              <div className="flex min-w-max flex-nowrap gap-2">
+                {ISSUER_OPTIONS.map((issuer) => {
+                  const isActive = activeIssuer === issuer.id;
 
-                return (
-                  <button
-                    key={issuer.id}
-                    type="button"
-                    onClick={() => issuer.enabled && setActiveIssuer(issuer.id)}
-                    disabled={!issuer.enabled}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${rowTransition} ${
-                      issuer.enabled
-                        ? isActive
-                          ? "border-cyan-300/70 bg-cyan-400/10 text-cyan-100"
-                          : "border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
-                        : "cursor-not-allowed border-slate-800 bg-slate-900/60 text-slate-500"
-                    }`}
-                  >
-                    <span>{issuer.name}</span>
-                    {!issuer.enabled ? (
-                      <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400">
-                        Coming soon
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+                  if (issuer.kind === "more") {
+                    return (
+                      <div key={issuer.id} className="relative" ref={moreContainerRef}>
+                        <button
+                          ref={moreButtonRef}
+                          type="button"
+                          aria-haspopup="menu"
+                          aria-expanded={isMoreMenuOpen}
+                          onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                          onKeyDown={handleMoreButtonKeyDown}
+                          className={`inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-500 ${rowTransition}`}
+                        >
+                          More
+                        </button>
+                        {isMoreMenuOpen ? (
+                          <div
+                            ref={moreMenuRef}
+                            role="menu"
+                            tabIndex={-1}
+                            className="absolute left-0 top-full z-20 mt-2 min-w-[11rem] rounded-xl border border-slate-700 bg-slate-900/95 p-1 shadow-lg shadow-black/30 transition duration-150 ease-out"
+                          >
+                            <div
+                              role="menuitem"
+                              aria-disabled="true"
+                              tabIndex={0}
+                              className="rounded-lg px-3 py-2 text-sm italic text-slate-500"
+                            >
+                              More available
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={issuer.id}
+                      type="button"
+                      onClick={issuer.enabled ? () => handleIssuerClick(issuer) : undefined}
+                      title={!issuer.enabled ? "Coming soon" : undefined}
+                      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm ${rowTransition} ${
+                        issuer.enabled
+                          ? isActive
+                            ? "border-cyan-300/70 bg-cyan-400/10 text-cyan-100"
+                            : "border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
+                          : "cursor-not-allowed border-slate-800 bg-slate-900/60 text-slate-500 italic"
+                      }`}
+                    >
+                      {issuer.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>
@@ -211,8 +388,32 @@ export function WalletBuilder() {
               {canSearch && error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
             </div>
 
+            {duplicateToast ? (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/85 px-3 py-2 shadow-sm shadow-black/30">
+                <p className="text-sm text-slate-200" role="status" aria-live="polite">
+                  Already in wallet. Add another?
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={confirmDuplicateAdd}
+                    className={`rounded-md border border-cyan-300/40 bg-cyan-400/10 px-2.5 py-1 text-xs font-medium text-cyan-100 hover:bg-cyan-400/20 ${rowTransition}`}
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateToast(null)}
+                    className={`rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-medium text-slate-200 hover:border-slate-500 ${rowTransition}`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {shouldShowResults ? (
-              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/70">
+              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/70 opacity-100 transition duration-150 ease-out">
                 {results.length === 0 && !isLoading && !error ? (
                   <p className="px-3 py-3 text-sm text-slate-400">No matches</p>
                 ) : (
@@ -224,7 +425,7 @@ export function WalletBuilder() {
                         <li key={`${card.id}-${index}`}>
                           <button
                             type="button"
-                            onClick={() => addCard(card)}
+                            onClick={() => attemptAddCard(card)}
                             className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${rowTransition} ${
                               highlighted
                                 ? "bg-cyan-400/10 text-cyan-100"
@@ -251,7 +452,7 @@ export function WalletBuilder() {
               {selectedCards.length === 0 ? (
                 <p className="px-3 py-4 text-sm text-slate-500">No cards added yet.</p>
               ) : (
-                <ul className="max-h-[22.5rem] overflow-auto py-1">
+                <ul className="max-h-[22rem] overflow-auto py-1">
                   {selectedCards.map((card) => (
                     <li key={card.instanceId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                       <div className="flex min-w-0 items-center gap-2 text-slate-200">
