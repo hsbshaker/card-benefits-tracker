@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useState } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 
 const fadeUp = {
@@ -16,6 +18,25 @@ const fadeUp = {
 };
 
 export default function LandingPage() {
+  const supabase = createClient();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  async function signInWithGoogle() {
+    setIsSigningIn(true);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding/cards`,
+      },
+    });
+
+    if (error) {
+      setIsSigningIn(false);
+      alert(error.message);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#0B1220] text-white selection:bg-[#F7C948]/30 selection:text-white">
       {/* Background glow */}
@@ -42,12 +63,14 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-3">
 
-            <Link
-              href="/login"
+            <button
+              type="button"
+              onClick={signInWithGoogle}
+              disabled={isSigningIn}
               className="inline-flex items-center justify-center rounded-xl bg-[#7FB6FF] px-4 py-2 text-sm font-semibold text-[#08111F] shadow-[0_10px_35px_-15px_rgba(127,182,255,0.7)] hover:brightness-110 active:brightness-95 transition"
             >
               Continue with Google
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -82,13 +105,15 @@ export default function LandingPage() {
               custom={0.24}
               className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center"
             >
-              <Link
-                href="/login"
+              <button
+                type="button"
+                onClick={signInWithGoogle}
+                disabled={isSigningIn}
                 className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-[#7FB6FF] px-7 py-3.5 text-base font-semibold text-[#08111F] shadow-[0_16px_45px_-18px_rgba(127,182,255,0.75)] hover:brightness-110 active:brightness-95 transition"
               >
                 Continue with Google
                 <span className="text-[#08111F]/70 group-hover:text-[#08111F] transition">→</span>
-              </Link>
+              </button>
 
               <a
                 href="#"
