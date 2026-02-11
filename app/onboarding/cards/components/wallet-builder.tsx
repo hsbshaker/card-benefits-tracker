@@ -1,6 +1,10 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef, KeyboardEvent } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AppShell } from "@/components/ui/AppShell";
+import { Button } from "@/components/ui/Button";
+import { Surface } from "@/components/ui/Surface";
+import { cn } from "@/lib/cn";
 
 type IssuerOption = {
   id: string;
@@ -40,7 +44,9 @@ const ISSUER_OPTIONS: IssuerOption[] = [
   { id: "citi", name: "Citi", enabled: false, kind: "issuer" },
 ];
 
-const rowTransition = "transition duration-150 ease-out";
+const rowTransition = "transition motion-safe:duration-200 ease-out";
+const controlClasses =
+  "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm text-white/95 outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
 export function WalletBuilder() {
   const [activeIssuer, setActiveIssuer] = useState<string | null>(null);
@@ -69,6 +75,7 @@ export function WalletBuilder() {
   const shouldShowResults = normalizedQuery.length >= 1;
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
+
   const resetSearchState = () => {
     setQuery("");
     setResults([]);
@@ -212,24 +219,18 @@ export function WalletBuilder() {
         }
 
         const data: CardResult[] = await response.json();
-        if (seq !== requestSeqRef.current) {
-          return;
-        }
+        if (seq !== requestSeqRef.current) return;
 
         setResults(data);
         setError(null);
         setHighlightedIndex((prev) => (data.length === 0 ? 0 : Math.min(prev, data.length - 1)));
       } catch (fetchError) {
-        if (controller.signal.aborted || seq !== requestSeqRef.current) {
-          return;
-        }
+        if (controller.signal.aborted || seq !== requestSeqRef.current) return;
 
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load cards");
         setResults([]);
       } finally {
-        if (seq === requestSeqRef.current) {
-          setIsLoading(false);
-        }
+        if (seq === requestSeqRef.current) setIsLoading(false);
       }
     }, 200);
 
@@ -299,16 +300,12 @@ export function WalletBuilder() {
         const data: CardResult[] = await response.json();
         setIssuerCardOptions(data);
       } catch (fetchError) {
-        if (controller.signal.aborted) {
-          return;
-        }
+        if (controller.signal.aborted) return;
 
         setIssuerCardOptions([]);
         setIssuerCardError(fetchError instanceof Error ? fetchError.message : "Failed to load issuer cards");
       } finally {
-        if (!controller.signal.aborted) {
-          setIssuerCardLoading(false);
-        }
+        if (!controller.signal.aborted) setIssuerCardLoading(false);
       }
     };
 
@@ -401,295 +398,314 @@ export function WalletBuilder() {
   };
 
   const ctaLabel = useMemo(() => {
-    if (selectedCards.length === 0) {
-      return "Select a card to continue";
-    }
+    if (selectedCards.length === 0) return "Select a card to continue";
 
     return `Continue with ${selectedCards.length} card${selectedCards.length === 1 ? "" : "s"}`;
   }, [selectedCards.length]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <AppShell containerClassName="py-8 sm:py-10">
       <div className="pointer-events-none fixed right-6 top-6 z-50 flex flex-col gap-2">
         {toasts.map((toast) => (
-          <div
+          <Surface
             key={toast.id}
-            className="pointer-events-auto flex items-start gap-3 rounded-xl border border-slate-700/80 bg-slate-900/85 px-3 py-2 shadow-lg shadow-black/30 backdrop-blur"
+            className="pointer-events-auto flex items-start gap-3 rounded-xl px-3 py-2"
             role="status"
             aria-live="polite"
             aria-atomic="true"
           >
-            <span className="text-sm text-slate-100">{toast.message}</span>
+            <span className="text-sm text-white/90">{toast.message}</span>
             <button
               type="button"
               onClick={() => removeToast(toast.id)}
-              className="-mr-1 shrink-0 rounded-md px-1 text-slate-300 hover:bg-slate-700/80 hover:text-slate-100"
+              className={cn("-mr-1 shrink-0 rounded-md px-1 text-white/70 hover:bg-white/10 hover:text-white", rowTransition)}
               aria-label="Dismiss notification"
             >
               ×
             </button>
-          </div>
+          </Surface>
         ))}
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Step 1 of 2 — Add your cards</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Add cards</h1>
-          <p className="mt-2 text-sm text-slate-400">Build your digital wallet with your cards.</p>
-        </div>
+      <div className="mb-8">
+        <p className="text-xs font-medium uppercase tracking-wide text-white/55">Step 1 of 2 — Add your cards</p>
+        <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Add cards</h1>
+        <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
+          Build your digital wallet with your cards.
+        </p>
+      </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4 sm:p-4">
-            <div>
-              <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">
-                Search cards
-              </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500" aria-hidden>
-                  <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
-                    <circle cx="8.5" cy="8.5" r="5.5" />
-                    <path d="m12.5 12.5 4 4" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <input
-                  ref={searchInputRef}
-                  id="card-search"
-                  type="text"
-                  value={query}
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <Surface as="section" className="p-4 sm:p-5">
+          <div>
+            <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
+              Search cards
+            </label>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40" aria-hidden>
+                <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+                  <circle cx="8.5" cy="8.5" r="5.5" />
+                  <path d="m12.5 12.5 4 4" strokeLinecap="round" />
+                </svg>
+              </span>
+              <input
+                ref={searchInputRef}
+                id="card-search"
+                type="text"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setHighlightedIndex(0);
+                }}
+                onKeyDown={handleResultsKeyDown}
+                placeholder="Search cards (e.g., Platinum, Sapphire)"
+                className={cn(controlClasses, "pl-10 pr-12", rowTransition)}
+              />
+              <div className="absolute inset-y-0 right-3 flex items-center">
+                {query ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetSearchState();
+                      searchInputRef.current?.focus();
+                    }}
+                    className={cn("rounded-md px-1.5 py-0.5 text-white/55 hover:bg-white/10 hover:text-white", rowTransition)}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                ) : (
+                  <span className="text-xs font-medium text-white/40">⌘K</span>
+                )}
+              </div>
+            </div>
+            {showLoading ? <p className="mt-2 text-xs text-white/60">Loading cards…</p> : null}
+            {error ? <p className="mt-2 text-xs text-[#F7C948]">{error}</p> : null}
+          </div>
+
+          {shouldShowResults ? (
+            <Surface
+              className={cn(
+                "mt-3 rounded-xl border-white/10 bg-white/5 opacity-100",
+                "motion-safe:transition motion-safe:duration-200 motion-safe:ease-out",
+              )}
+            >
+              {results.length === 0 && !isLoading && !error ? (
+                <p className="px-3 py-3 text-sm text-white/60">No cards found.</p>
+              ) : (
+                <ul className="max-h-96 overflow-auto py-1">
+                  {results.map((card, index) => {
+                    const highlighted = index === highlightedIndex;
+                    const alreadyAdded = selectedCards.some((selected) => selected.cardId === card.id);
+
+                    return (
+                      <li key={`${card.id}-${index}`}>
+                        <div
+                          className={cn(
+                            "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm",
+                            rowTransition,
+                            highlighted
+                              ? "border-[#F7C948]/40 bg-[#F7C948]/12 text-white"
+                              : "text-white/90 hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10 hover:text-white",
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate">{card.card_name}</p>
+                            <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
+                          </div>
+                          {alreadyAdded ? (
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-white/55">In wallet</span>
+                              <Button
+                                size="sm"
+                                variant="subtle"
+                                onClick={() => addDuplicateInstance(card)}
+                                className="rounded-lg px-2 py-1 text-xs"
+                              >
+                                Add Another
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="subtle"
+                              onClick={() => attemptAddCard(card)}
+                              className="rounded-lg px-2 py-1 text-xs"
+                            >
+                              + Add
+                            </Button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Surface>
+          ) : null}
+
+          <Surface
+            className={cn(
+              "mt-5 rounded-xl border-white/10 bg-white/5 p-3 transition-opacity transition-transform motion-safe:duration-200 ease-out",
+              isSearching
+                ? "pointer-events-none translate-y-1 scale-[0.99] opacity-60"
+                : "pointer-events-auto translate-y-0 scale-100 opacity-100",
+            )}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-white/60">Browse by issuer</p>
+              {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
+                  Issuer
+                </label>
+                <select
+                  id="issuer-select"
+                  value={activeIssuer ?? "all"}
                   onChange={(event) => {
-                    setQuery(event.target.value);
-                    setHighlightedIndex(0);
+                    const nextIssuer = event.target.value === "all" ? null : event.target.value;
+                    setActiveIssuer(nextIssuer);
+                    setIssuerCardId(null);
+                    setIssuerCardOptions([]);
                   }}
-                  onKeyDown={handleResultsKeyDown}
-                  placeholder="Search cards (e.g., Platinum, Sapphire)"
-                  className={`w-full rounded-xl border border-slate-700/70 bg-slate-950/80 py-2.5 pl-10 pr-12 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30 ${rowTransition}`}
-                />
-                <div className="absolute inset-y-0 right-3 flex items-center">
-                  {query ? (
+                  className={cn(controlClasses, "appearance-none", rowTransition)}
+                >
+                  <option value="all">All issuers</option>
+                  {enabledIssuers.map((issuer) => (
+                    <option key={issuer.id} value={issuer.id}>
+                      {issuer.name}
+                    </option>
+                  ))}
+                  {comingSoonIssuers.map((issuer) => (
+                    <option key={issuer.id} value={issuer.id} disabled>
+                      {issuer.name} (Coming soon)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="issuer-card-select"
+                  className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50"
+                >
+                  Card
+                </label>
+                <select
+                  id="issuer-card-select"
+                  value={issuerCardId ?? ""}
+                  onChange={(event) => {
+                    const selectedCard = issuerCardOptions.find((card) => card.id === event.target.value);
+                    if (!selectedCard) {
+                      setIssuerCardId(null);
+                      return;
+                    }
+
+                    setIssuerCardId(selectedCard.id);
+                    attemptAddCard(selectedCard);
+                    setIssuerCardId(null);
+                  }}
+                  disabled={!activeIssuer || issuerCardLoading}
+                  className={cn(
+                    controlClasses,
+                    "appearance-none disabled:cursor-not-allowed disabled:opacity-60",
+                    rowTransition,
+                  )}
+                >
+                  <option value="">Select a card…</option>
+                  {issuerCardOptions.map((card) => (
+                    <option key={card.id} value={card.id}>
+                      {card.card_name}
+                    </option>
+                  ))}
+                </select>
+                {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
+                {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
+              </div>
+            </div>
+          </Surface>
+
+          {pendingDuplicate ? (
+            <Surface className="mt-3 flex items-center justify-between gap-3 rounded-xl border-white/15 px-3 py-2">
+              <p className="text-sm text-white/85" role="status" aria-live="polite">
+                Already in wallet. Add another?
+              </p>
+              <div className="flex items-center gap-2">
+                <Button type="button" onClick={confirmDuplicateAdd} size="sm" variant="subtle" className="rounded-md px-2.5 py-1 text-xs">
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setPendingDuplicate(null)}
+                  size="sm"
+                  variant="secondary"
+                  className="rounded-md px-2.5 py-1 text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </Surface>
+          ) : null}
+        </Surface>
+
+        <Surface as="aside" className="p-4 sm:p-5">
+          <h2 className="text-sm font-medium text-white/90">Digital Wallet ({selectedCards.length})</h2>
+          {selectedCards.length === 0 ? (
+            <p className="mt-1 text-xs text-white/60">No cards added yet. Add at least one card to continue.</p>
+          ) : null}
+
+          <Surface className="mt-3 rounded-xl border-white/10 bg-white/5">
+            {selectedCards.length === 0 ? (
+              <p className="px-3 py-4 text-sm text-white/45">No cards added yet.</p>
+            ) : (
+              <ul className="max-h-[22rem] space-y-1 overflow-auto p-2">
+                {selectedCards.map((card) => (
+                  <li
+                    key={card.instanceId}
+                    className={cn(
+                      "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
+                      "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-2 text-white/90">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
+                      <span className="truncate">{card.card_name}</span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        resetSearchState();
-                        searchInputRef.current?.focus();
-                      }}
-                      className={`rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-slate-800/90 hover:text-slate-100 ${rowTransition}`}
-                      aria-label="Clear search"
+                      onClick={() => removeCardInstance(card.instanceId)}
+                      className={cn(
+                        "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
+                        rowTransition,
+                      )}
+                      aria-label={`Remove ${card.card_name}`}
                     >
                       ×
                     </button>
-                  ) : (
-                    <span className="text-xs font-medium text-slate-500">⌘K</span>
-                  )}
-                </div>
-              </div>
-              {showLoading ? <p className="mt-2 text-xs text-slate-400">Loading cards…</p> : null}
-              {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
-            </div>
-
-            {shouldShowResults ? (
-              <div className="mt-3 rounded-xl border border-slate-800/70 bg-slate-950/70 opacity-100 transition duration-150 ease-out">
-                {results.length === 0 && !isLoading && !error ? (
-                  <p className="px-3 py-3 text-sm text-slate-400">No cards found.</p>
-                ) : (
-                  <ul className="max-h-96 overflow-auto py-1">
-                    {results.map((card, index) => {
-                      const highlighted = index === highlightedIndex;
-                      const alreadyAdded = selectedCards.some((selected) => selected.cardId === card.id);
-
-                      return (
-                        <li key={`${card.id}-${index}`}>
-                          <div
-                            className={`flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm ${rowTransition} ${
-                              highlighted
-                                ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-100"
-                                : "text-slate-200 hover:border-amber-200/20 hover:bg-slate-800/70 hover:text-slate-100"
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate">{card.card_name}</p>
-                              <p className="mt-0.5 text-xs text-slate-400">{card.issuer}</p>
-                            </div>
-                            {alreadyAdded ? (
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400">In wallet</span>
-                                <button
-                                  type="button"
-                                  onClick={() => addDuplicateInstance(card)}
-                                  className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
-                                >
-                                  Add Another
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => attemptAddCard(card)}
-                                className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
-                              >
-                                + Add
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-
-            <div
-              className={`mt-5 rounded-xl border border-slate-800/70 bg-slate-950/50 p-3 transition-opacity transition-transform duration-200 ease-out ${
-                isSearching
-                  ? "pointer-events-none translate-y-1 scale-[0.99] opacity-60"
-                  : "pointer-events-auto translate-y-0 scale-100 opacity-100"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Browse by issuer</p>
-                {isSearching ? <span className="text-xs text-slate-400">Clear search to browse</span> : null}
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Issuer
-                  </label>
-                  <select
-                    id="issuer-select"
-                    value={activeIssuer ?? "all"}
-                    onChange={(event) => {
-                      const nextIssuer = event.target.value === "all" ? null : event.target.value;
-                      setActiveIssuer(nextIssuer);
-                      setIssuerCardId(null);
-                      setIssuerCardOptions([]);
-                    }}
-                    className={`w-full appearance-none rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30 ${rowTransition}`}
-                  >
-                    <option value="all">All issuers</option>
-                    {enabledIssuers.map((issuer) => (
-                      <option key={issuer.id} value={issuer.id}>
-                        {issuer.name}
-                      </option>
-                    ))}
-                    {comingSoonIssuers.map((issuer) => (
-                      <option key={issuer.id} value={issuer.id} disabled>
-                        {issuer.name} (Coming soon)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="issuer-card-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Card
-                  </label>
-                  <select
-                    id="issuer-card-select"
-                    value={issuerCardId ?? ""}
-                    onChange={(event) => {
-                      const selectedCard = issuerCardOptions.find((card) => card.id === event.target.value);
-                      if (!selectedCard) {
-                        setIssuerCardId(null);
-                        return;
-                      }
-
-                      setIssuerCardId(selectedCard.id);
-                      attemptAddCard(selectedCard);
-                      setIssuerCardId(null);
-                    }}
-                    disabled={!activeIssuer || issuerCardLoading}
-                    className={`w-full appearance-none rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-60 ${rowTransition}`}
-                  >
-                    <option value="">Select a card…</option>
-                    {issuerCardOptions.map((card) => (
-                      <option key={card.id} value={card.id}>
-                        {card.card_name}
-                      </option>
-                    ))}
-                  </select>
-                  {issuerCardLoading ? <p className="mt-2 text-xs text-slate-400">Loading issuer cards…</p> : null}
-                  {issuerCardError ? <p className="mt-2 text-xs text-rose-300">{issuerCardError}</p> : null}
-                </div>
-              </div>
-            </div>
-
-            {pendingDuplicate ? (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/85 px-3 py-2 shadow-sm shadow-black/30">
-                <p className="text-sm text-slate-200" role="status" aria-live="polite">
-                  Already in wallet. Add another?
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={confirmDuplicateAdd}
-                    className={`rounded-md border border-cyan-300/40 bg-cyan-400/10 px-2.5 py-1 text-xs font-medium text-cyan-100 hover:bg-cyan-400/20 ${rowTransition}`}
-                  >
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPendingDuplicate(null)}
-                    className={`rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-medium text-slate-200 hover:border-slate-500 ${rowTransition}`}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-          </section>
-
-          <aside className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4 sm:p-4">
-            <h2 className="text-sm font-medium text-slate-200">Digital Wallet ({selectedCards.length})</h2>
-            {selectedCards.length === 0 ? (
-              <p className="mt-1 text-xs text-slate-400">No cards added yet. Add at least one card to continue.</p>
-            ) : null}
-
-            <div className="mt-3 rounded-xl border border-slate-800/70 bg-slate-950/60">
-              {selectedCards.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-slate-500">No cards added yet.</p>
-              ) : (
-                <ul className="max-h-[22rem] space-y-1 overflow-auto p-2">
-                  {selectedCards.map((card) => (
-                    <li
-                      key={card.instanceId}
-                      className="group flex items-center justify-between gap-3 rounded-lg border border-slate-800/70 bg-slate-900/70 px-3 py-2 text-sm hover:border-slate-700/90 hover:bg-slate-900"
-                    >
-                      <div className="flex min-w-0 items-center gap-2 text-slate-200">
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-300/80" aria-hidden />
-                        <span className="truncate">{card.card_name}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeCardInstance(card.instanceId)}
-                        className={`shrink-0 rounded-lg px-1.5 py-0.5 text-slate-400 opacity-20 hover:bg-slate-800 hover:text-slate-100 group-hover:opacity-100 ${rowTransition}`}
-                        aria-label={`Remove ${card.card_name}`}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </aside>
-        </div>
-
-        <div className="mt-6 border-t border-slate-800/70 pt-4">
-          <button
-            type="button"
-            disabled={selectedCards.length === 0}
-            className={`w-full rounded-xl px-4 py-3 text-sm font-medium ${rowTransition} ${
-              selectedCards.length === 0
-                ? "cursor-not-allowed border border-slate-700/80 bg-slate-800/70 text-slate-500"
-                : "border border-cyan-300/40 bg-cyan-400/80 text-slate-950 hover:bg-cyan-300/90"
-            }`}
-          >
-            {ctaLabel}
-          </button>
-        </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Surface>
+        </Surface>
       </div>
-    </div>
+
+      <div className="mt-6 border-t border-white/10 pt-4">
+        <Button
+          type="button"
+          disabled={selectedCards.length === 0}
+          size="lg"
+          className={cn(
+            "w-full",
+            selectedCards.length === 0 &&
+              "border border-white/15 bg-white/8 text-white/45 shadow-none hover:brightness-100 active:brightness-100",
+          )}
+        >
+          {ctaLabel}
+        </Button>
+      </div>
+    </AppShell>
   );
 }
