@@ -53,6 +53,8 @@ export function WalletBuilder() {
   const [duplicateToast, setDuplicateToast] = useState<DuplicateToastState | null>(null);
 
   const requestAbortRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
+  const latestQueryRef = useRef<string>("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
   const loadingDelayRef = useRef<number | null>(null);
@@ -71,6 +73,7 @@ export function WalletBuilder() {
       window.clearTimeout(loadingDelayRef.current);
       loadingDelayRef.current = null;
     }
+    requestSeqRef.current += 1;
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
   };
@@ -96,28 +99,44 @@ export function WalletBuilder() {
 
   useEffect(() => {
     if (!shouldShowResults) {
-      setResults([]);
-      setIsLoading(false);
-      setError(null);
-      setHighlightedIndex(0);
+      if (results.length) setResults([]);
+      if (isLoading) setIsLoading(false);
+      if (error) setError(null);
+      if (highlightedIndex !== 0) setHighlightedIndex(0);
+      requestSeqRef.current += 1;
       requestAbortRef.current?.abort();
       requestAbortRef.current = null;
+    }
+  }, [shouldShowResults, results.length, isLoading, error, highlightedIndex]);
+
+  const singleEnabledIssuerId = useMemo(
+    () => (enabledIssuers.length === 1 ? enabledIssuers[0].id : null),
+    [enabledIssuers],
+  );
+
+  useEffect(() => {
+    if (!shouldShowResults) {
       return;
     }
 
-    const controller = new AbortController();
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = controller;
+    latestQueryRef.current = normalizedQuery;
 
     const timeout = window.setTimeout(async () => {
+      const seq = ++requestSeqRef.current;
+      const qAtStart = latestQueryRef.current;
+
       setIsLoading(true);
       setError(null);
+      requestAbortRef.current?.abort();
+
+      const controller = new AbortController();
+      requestAbortRef.current = controller;
 
       try {
-        const params = new URLSearchParams({ q: normalizedQuery });
+        const params = new URLSearchParams({ q: qAtStart });
 
-        if (enabledIssuers.length === 1) {
-          params.set("issuer", enabledIssuers[0].id);
+        if (singleEnabledIssuerId) {
+          params.set("issuer", singleEnabledIssuerId);
         }
 
         const response = await fetch(`/api/cards?${params.toString()}`, {
@@ -130,17 +149,22 @@ export function WalletBuilder() {
         }
 
         const data: CardResult[] = await response.json();
-        setResults(data);
-        setHighlightedIndex((prev) => (data.length === 0 ? 0 : Math.min(prev, data.length - 1)));
-      } catch (fetchError) {
-        if (controller.signal.aborted) {
+        if (seq !== requestSeqRef.current) {
           return;
         }
 
-        setResults([]);
+        setResults(data);
+        setError(null);
+        setHighlightedIndex((prev) => (data.length === 0 ? 0 : Math.min(prev, data.length - 1)));
+      } catch (fetchError) {
+        if (controller.signal.aborted || seq !== requestSeqRef.current) {
+          return;
+        }
+
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load cards");
+        setResults([]);
       } finally {
-        if (!controller.signal.aborted) {
+        if (seq === requestSeqRef.current) {
           setIsLoading(false);
         }
       }
@@ -148,9 +172,8 @@ export function WalletBuilder() {
 
     return () => {
       window.clearTimeout(timeout);
-      controller.abort();
     };
-  }, [enabledIssuers, normalizedQuery, shouldShowResults]);
+  }, [normalizedQuery, shouldShowResults, singleEnabledIssuerId]);
 
   useEffect(() => {
     if (!duplicateToast) return;
