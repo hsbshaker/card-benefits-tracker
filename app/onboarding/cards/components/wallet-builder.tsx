@@ -65,6 +65,7 @@ export function WalletBuilder() {
   const toastTimersRef = useRef<Record<string, number>>({});
   const loadingDelayRef = useRef<number | null>(null);
   const normalizedQuery = query.trim();
+  const isSearching = query.trim().length > 0;
   const shouldShowResults = normalizedQuery.length >= 1;
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
@@ -484,8 +485,69 @@ export function WalletBuilder() {
               {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
             </div>
 
-            <div className="mt-5 rounded-xl border border-slate-800/70 bg-slate-950/50 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Browse by issuer</p>
+            {shouldShowResults ? (
+              <div className="mt-3 rounded-xl border border-slate-800/70 bg-slate-950/70 opacity-100 transition duration-150 ease-out">
+                {results.length === 0 && !isLoading && !error ? (
+                  <p className="px-3 py-3 text-sm text-slate-400">No cards found.</p>
+                ) : (
+                  <ul className="max-h-96 overflow-auto py-1">
+                    {results.map((card, index) => {
+                      const highlighted = index === highlightedIndex;
+                      const alreadyAdded = selectedCards.some((selected) => selected.cardId === card.id);
+
+                      return (
+                        <li key={`${card.id}-${index}`}>
+                          <div
+                            className={`flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm ${rowTransition} ${
+                              highlighted
+                                ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-100"
+                                : "text-slate-200 hover:border-amber-200/20 hover:bg-slate-800/70 hover:text-slate-100"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate">{card.card_name}</p>
+                              <p className="mt-0.5 text-xs text-slate-400">{card.issuer}</p>
+                            </div>
+                            {alreadyAdded ? (
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-slate-400">In wallet</span>
+                                <button
+                                  type="button"
+                                  onClick={() => addDuplicateInstance(card)}
+                                  className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
+                                >
+                                  Add Another
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => attemptAddCard(card)}
+                                className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
+                              >
+                                + Add
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
+            <div
+              className={`mt-5 rounded-xl border border-slate-800/70 bg-slate-950/50 p-3 transition-opacity transition-transform duration-200 ease-out ${
+                isSearching
+                  ? "pointer-events-none translate-y-1 scale-[0.99] opacity-60"
+                  : "pointer-events-auto translate-y-0 scale-100 opacity-100"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Browse by issuer</p>
+                {isSearching ? <span className="text-xs text-slate-400">Clear search to browse</span> : null}
+              </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -574,57 +636,6 @@ export function WalletBuilder() {
               </div>
             ) : null}
 
-            {shouldShowResults ? (
-              <div className="mt-3 rounded-xl border border-slate-800/70 bg-slate-950/70 opacity-100 transition duration-150 ease-out">
-                {results.length === 0 && !isLoading && !error ? (
-                  <p className="px-3 py-3 text-sm text-slate-400">No cards found.</p>
-                ) : (
-                  <ul className="max-h-96 overflow-auto py-1">
-                    {results.map((card, index) => {
-                      const highlighted = index === highlightedIndex;
-                      const alreadyAdded = selectedCards.some((selected) => selected.cardId === card.id);
-
-                      return (
-                        <li key={`${card.id}-${index}`}>
-                          <div
-                            className={`flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm ${rowTransition} ${
-                              highlighted
-                                ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-100"
-                                : "text-slate-200 hover:border-amber-200/20 hover:bg-slate-800/70 hover:text-slate-100"
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate">{card.card_name}</p>
-                              <p className="mt-0.5 text-xs text-slate-400">{card.issuer}</p>
-                            </div>
-                            {alreadyAdded ? (
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400">In wallet</span>
-                                <button
-                                  type="button"
-                                  onClick={() => addDuplicateInstance(card)}
-                                  className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
-                                >
-                                  Add Another
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => attemptAddCard(card)}
-                                className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
-                              >
-                                + Add
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ) : null}
           </section>
 
           <aside className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4 sm:p-4">
