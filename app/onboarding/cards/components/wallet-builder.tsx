@@ -25,6 +25,10 @@ type SelectedCardInstance = {
 };
 
 type DuplicateToastState = {
+  message: string;
+};
+
+type PendingDuplicateState = {
   card: CardResult;
 };
 
@@ -51,6 +55,7 @@ export function WalletBuilder() {
   const [issuerCardLoading, setIssuerCardLoading] = useState(false);
   const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
   const [duplicateToast, setDuplicateToast] = useState<DuplicateToastState | null>(null);
+  const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicateState | null>(null);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -267,22 +272,6 @@ export function WalletBuilder() {
     };
   }, [activeIssuer]);
 
-  useEffect(() => {
-    if (!duplicateToast) return;
-
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setDuplicateToast(null);
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [duplicateToast]);
-
   const addCardInstance = (card: CardResult) => {
     const instanceId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -306,7 +295,7 @@ export function WalletBuilder() {
     resetSearchState();
 
     if (hasDuplicate) {
-      setDuplicateToast({ card });
+      setPendingDuplicate({ card });
       return;
     }
 
@@ -314,13 +303,26 @@ export function WalletBuilder() {
   };
 
   const confirmDuplicateAdd = () => {
-    if (!duplicateToast) return;
-    addCardInstance(duplicateToast.card);
-    setDuplicateToast(null);
+    if (!pendingDuplicate) return;
+    addCardInstance(pendingDuplicate.card);
+    setPendingDuplicate(null);
+    setDuplicateToast({ message: `Added another ${pendingDuplicate.card.card_name}.` });
   };
 
   const removeCardInstance = (instanceId: string) => {
-    setSelectedCards((prev) => prev.filter((card) => card.instanceId !== instanceId));
+    setSelectedCards((prev) => {
+      const cardToRemove = prev.find((card) => card.instanceId === instanceId);
+      const next = prev.filter((card) => card.instanceId !== instanceId);
+
+      if (cardToRemove && pendingDuplicate && cardToRemove.cardId === pendingDuplicate.card.id) {
+        const stillHasCard = next.some((card) => card.cardId === pendingDuplicate.card.id);
+        if (!stillHasCard) {
+          setPendingDuplicate(null);
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -481,7 +483,7 @@ export function WalletBuilder() {
               </div>
             </div>
 
-            {duplicateToast ? (
+            {pendingDuplicate ? (
               <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-700/80 bg-slate-950/85 px-3 py-2 shadow-sm shadow-black/30">
                 <p className="text-sm text-slate-200" role="status" aria-live="polite">
                   Already in wallet. Add another?
@@ -496,12 +498,18 @@ export function WalletBuilder() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDuplicateToast(null)}
+                    onClick={() => setPendingDuplicate(null)}
                     className={`rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-medium text-slate-200 hover:border-slate-500 ${rowTransition}`}
                   >
                     Cancel
                   </button>
                 </div>
+              </div>
+            ) : null}
+
+            {duplicateToast ? (
+              <div className="mt-3 rounded-xl border border-slate-800/80 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">
+                {duplicateToast.message}
               </div>
             ) : null}
 
