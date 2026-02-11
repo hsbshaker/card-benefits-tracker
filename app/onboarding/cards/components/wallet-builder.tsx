@@ -24,7 +24,8 @@ type SelectedCardInstance = {
   issuer: string;
 };
 
-type DuplicateToastState = {
+type Toast = {
+  id: string;
   message: string;
 };
 
@@ -54,14 +55,14 @@ export function WalletBuilder() {
   const [issuerCardOptions, setIssuerCardOptions] = useState<CardResult[]>([]);
   const [issuerCardLoading, setIssuerCardLoading] = useState(false);
   const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
-  const [duplicateToast, setDuplicateToast] = useState<DuplicateToastState | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicateState | null>(null);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
   const latestQueryRef = useRef<string>("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const toastTimeoutRef = useRef<number | null>(null);
+  const toastTimersRef = useRef<Record<string, number>>({});
   const loadingDelayRef = useRef<number | null>(null);
   const normalizedQuery = query.trim();
   const shouldShowResults = normalizedQuery.length >= 1;
@@ -81,6 +82,61 @@ export function WalletBuilder() {
     requestSeqRef.current += 1;
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
+  };
+
+  const resetAllInputsAfterAdd = () => {
+    setQuery("");
+    if (results.length) setResults([]);
+    if (highlightedIndex !== 0) setHighlightedIndex(0);
+    if (error) setError(null);
+    if (isLoading) setIsLoading(false);
+
+    setShowLoading(false);
+    if (loadingDelayRef.current) {
+      window.clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = null;
+    }
+
+    requestSeqRef.current += 1;
+    if (requestAbortRef.current) {
+      requestAbortRef.current.abort();
+      requestAbortRef.current = null;
+    }
+
+    setActiveIssuer(null);
+    setIssuerCardId(null);
+    setIssuerCardOptions([]);
+    setIssuerCardLoading(false);
+    setIssuerCardError(null);
+    setPendingDuplicate(null);
+
+    searchInputRef.current?.focus();
+  };
+
+  const removeToast = (id: string) => {
+    const existingTimer = toastTimersRef.current[id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      delete toastTimersRef.current[id];
+    }
+
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
+  const pushToast = (message: string) => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    setToasts((prev) => [...prev, { id, message }]);
+
+    const timeout = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+      delete toastTimersRef.current[id];
+    }, 2800);
+
+    toastTimersRef.current[id] = timeout;
   };
 
   useEffect(() => {
@@ -181,23 +237,11 @@ export function WalletBuilder() {
   }, [normalizedQuery, shouldShowResults, singleEnabledIssuerId]);
 
   useEffect(() => {
-    if (!duplicateToast) return;
-
-    if (toastTimeoutRef.current) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setDuplicateToast(null);
-      toastTimeoutRef.current = null;
-    }, 4000);
-
     return () => {
-      if (toastTimeoutRef.current) {
-        window.clearTimeout(toastTimeoutRef.current);
-      }
+      Object.values(toastTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      toastTimersRef.current = {};
     };
-  }, [duplicateToast]);
+  }, []);
 
   useEffect(() => {
     if (loadingDelayRef.current) {
@@ -304,8 +348,8 @@ export function WalletBuilder() {
 
   const addDuplicateInstance = (card: CardResult) => {
     addCardInstance(card);
-    setPendingDuplicate(null);
-    setDuplicateToast({ message: `Added another ${card.card_name}.` });
+    resetAllInputsAfterAdd();
+    pushToast(`Added another ${card.card_name}.`);
   };
 
   const confirmDuplicateAdd = () => {
@@ -363,6 +407,28 @@ export function WalletBuilder() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="pointer-events-none fixed right-6 top-6 z-50 flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="pointer-events-auto flex items-start gap-3 rounded-xl border border-slate-700/80 bg-slate-900/85 px-3 py-2 shadow-lg shadow-black/30 backdrop-blur"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <span className="text-sm text-slate-100">{toast.message}</span>
+            <button
+              type="button"
+              onClick={() => removeToast(toast.id)}
+              className="-mr-1 shrink-0 rounded-md px-1 text-slate-300 hover:bg-slate-700/80 hover:text-slate-100"
+              aria-label="Dismiss notification"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-8">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Step 1 of 2 — Add your cards</p>
@@ -505,12 +571,6 @@ export function WalletBuilder() {
                     Cancel
                   </button>
                 </div>
-              </div>
-            ) : null}
-
-            {duplicateToast ? (
-              <div className="mt-3 rounded-xl border border-slate-800/80 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">
-                {duplicateToast.message}
               </div>
             ) : null}
 
