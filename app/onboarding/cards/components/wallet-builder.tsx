@@ -5,19 +5,13 @@ import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { CardResult, CardResultsList } from "./card-results-list";
 
 type IssuerOption = {
   id: string;
   name: string;
   enabled: boolean;
   kind: "issuer";
-};
-
-type CardResult = {
-  id: string;
-  issuer: string;
-  card_name: string;
-  network: string | null;
 };
 
 type SelectedCardInstance = {
@@ -31,10 +25,6 @@ type SelectedCardInstance = {
 type Toast = {
   id: string;
   message: string;
-};
-
-type PendingDuplicateState = {
-  card: CardResult;
 };
 
 const ISSUER_OPTIONS: IssuerOption[] = [
@@ -57,69 +47,27 @@ export function WalletBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCards, setSelectedCards] = useState<SelectedCardInstance[]>([]);
-  const [issuerCardId, setIssuerCardId] = useState<string | null>(null);
   const [issuerCardOptions, setIssuerCardOptions] = useState<CardResult[]>([]);
   const [issuerCardLoading, setIssuerCardLoading] = useState(false);
   const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
+  const [isIssuerPanelOpen, setIsIssuerPanelOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicateState | null>(null);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
   const latestQueryRef = useRef<string>("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const issuerPanelRef = useRef<HTMLDivElement | null>(null);
+  const issuerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const toastTimersRef = useRef<Record<string, number>>({});
   const loadingDelayRef = useRef<number | null>(null);
+
   const normalizedQuery = query.trim();
-  const isSearching = query.trim().length > 0;
+  const isSearching = normalizedQuery.length > 0;
   const shouldShowResults = normalizedQuery.length >= 1;
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
-
-  const resetSearchState = () => {
-    setQuery("");
-    setResults([]);
-    setError(null);
-    setHighlightedIndex(0);
-    setShowLoading(false);
-    setIsLoading(false);
-    if (loadingDelayRef.current) {
-      window.clearTimeout(loadingDelayRef.current);
-      loadingDelayRef.current = null;
-    }
-    requestSeqRef.current += 1;
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = null;
-  };
-
-  const resetAllInputsAfterAdd = () => {
-    setQuery("");
-    if (results.length) setResults([]);
-    if (highlightedIndex !== 0) setHighlightedIndex(0);
-    if (error) setError(null);
-    if (isLoading) setIsLoading(false);
-
-    setShowLoading(false);
-    if (loadingDelayRef.current) {
-      window.clearTimeout(loadingDelayRef.current);
-      loadingDelayRef.current = null;
-    }
-
-    requestSeqRef.current += 1;
-    if (requestAbortRef.current) {
-      requestAbortRef.current.abort();
-      requestAbortRef.current = null;
-    }
-
-    setActiveIssuer(null);
-    setIssuerCardId(null);
-    setIssuerCardOptions([]);
-    setIssuerCardLoading(false);
-    setIssuerCardError(null);
-    setPendingDuplicate(null);
-
-    searchInputRef.current?.focus();
-  };
+  const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
 
   const removeToast = (id: string) => {
     const existingTimer = toastTimersRef.current[id];
@@ -147,6 +95,34 @@ export function WalletBuilder() {
     toastTimersRef.current[id] = timeout;
   };
 
+  const addCardInstance = (card: CardResult) => {
+    const instanceId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${card.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    setSelectedCards((prev) => [
+      ...prev,
+      {
+        instanceId,
+        cardId: card.id,
+        card_name: card.card_name,
+        issuer: card.issuer,
+        network: card.network,
+      },
+    ]);
+  };
+
+  const addCard = (card: CardResult) => {
+    if (walletCardIds.has(card.id)) return;
+    addCardInstance(card);
+  };
+
+  const addDuplicateInstance = (card: CardResult) => {
+    addCardInstance(card);
+    pushToast(`Added another ${card.card_name}.`);
+  };
+
   useEffect(() => {
     searchInputRef.current?.focus();
   }, []);
@@ -160,10 +136,7 @@ export function WalletBuilder() {
     };
 
     document.addEventListener("keydown", handleFocusShortcut);
-
-    return () => {
-      document.removeEventListener("keydown", handleFocusShortcut);
-    };
+    return () => document.removeEventListener("keydown", handleFocusShortcut);
   }, []);
 
   useEffect(() => {
@@ -184,9 +157,7 @@ export function WalletBuilder() {
   );
 
   useEffect(() => {
-    if (!shouldShowResults) {
-      return;
-    }
+    if (!shouldShowResults) return;
 
     latestQueryRef.current = normalizedQuery;
 
@@ -203,15 +174,9 @@ export function WalletBuilder() {
 
       try {
         const params = new URLSearchParams({ q: qAtStart });
+        if (singleEnabledIssuerId) params.set("issuer", singleEnabledIssuerId);
 
-        if (singleEnabledIssuerId) {
-          params.set("issuer", singleEnabledIssuerId);
-        }
-
-        const response = await fetch(`/api/cards?${params.toString()}`, {
-          method: "GET",
-          signal: controller.signal,
-        });
+        const response = await fetch(`/api/cards?${params.toString()}`, { method: "GET", signal: controller.signal });
 
         if (!response.ok) {
           const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -234,17 +199,8 @@ export function WalletBuilder() {
       }
     }, 200);
 
-    return () => {
-      window.clearTimeout(timeout);
-    };
+    return () => window.clearTimeout(timeout);
   }, [normalizedQuery, shouldShowResults, singleEnabledIssuerId]);
-
-  useEffect(() => {
-    return () => {
-      Object.values(toastTimersRef.current).forEach((timer) => window.clearTimeout(timer));
-      toastTimersRef.current = {};
-    };
-  }, []);
 
   useEffect(() => {
     if (loadingDelayRef.current) {
@@ -271,9 +227,9 @@ export function WalletBuilder() {
   }, [isLoading]);
 
   useEffect(() => {
-    setIssuerCardId(null);
     setIssuerCardOptions([]);
     setIssuerCardError(null);
+    setIsIssuerPanelOpen(false);
 
     const selectedIssuer = ISSUER_OPTIONS.find((option) => option.id === activeIssuer);
     if (!activeIssuer || !selectedIssuer?.enabled) {
@@ -287,10 +243,7 @@ export function WalletBuilder() {
       setIssuerCardLoading(true);
       try {
         const params = new URLSearchParams({ issuer: activeIssuer });
-        const response = await fetch(`/api/cards?${params.toString()}`, {
-          method: "GET",
-          signal: controller.signal,
-        });
+        const response = await fetch(`/api/cards?${params.toString()}`, { method: "GET", signal: controller.signal });
 
         if (!response.ok) {
           const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -311,67 +264,39 @@ export function WalletBuilder() {
 
     loadIssuerCards();
 
-    return () => {
-      controller.abort();
-    };
+    return () => controller.abort();
   }, [activeIssuer]);
 
-  const addCardInstance = (card: CardResult) => {
-    const instanceId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${card.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  useEffect(() => {
+    if (!isIssuerPanelOpen) return;
 
-    setSelectedCards((prev) => [
-      ...prev,
-      {
-        instanceId,
-        cardId: card.id,
-        card_name: card.card_name,
-        issuer: card.issuer,
-        network: card.network,
-      },
-    ]);
-  };
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (issuerPanelRef.current?.contains(target) || issuerTriggerRef.current?.contains(target)) return;
+      setIsIssuerPanelOpen(false);
+    };
 
-  const attemptAddCard = (card: CardResult) => {
-    const hasDuplicate = selectedCards.some((selected) => selected.cardId === card.id);
-    resetSearchState();
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setIsIssuerPanelOpen(false);
+      issuerTriggerRef.current?.focus();
+    };
 
-    if (hasDuplicate) {
-      setPendingDuplicate({ card });
-      return;
-    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
 
-    addCardInstance(card);
-  };
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isIssuerPanelOpen]);
 
-  const addDuplicateInstance = (card: CardResult) => {
-    addCardInstance(card);
-    resetAllInputsAfterAdd();
-    pushToast(`Added another ${card.card_name}.`);
-  };
-
-  const confirmDuplicateAdd = () => {
-    if (!pendingDuplicate) return;
-    addDuplicateInstance(pendingDuplicate.card);
-  };
-
-  const removeCardInstance = (instanceId: string) => {
-    setSelectedCards((prev) => {
-      const cardToRemove = prev.find((card) => card.instanceId === instanceId);
-      const next = prev.filter((card) => card.instanceId !== instanceId);
-
-      if (cardToRemove && pendingDuplicate && cardToRemove.cardId === pendingDuplicate.card.id) {
-        const stillHasCard = next.some((card) => card.cardId === pendingDuplicate.card.id);
-        if (!stillHasCard) {
-          setPendingDuplicate(null);
-        }
-      }
-
-      return next;
-    });
-  };
+  useEffect(() => {
+    return () => {
+      Object.values(toastTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      toastTimersRef.current = {};
+    };
+  }, []);
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (!shouldShowResults || results.length === 0) return;
@@ -392,14 +317,17 @@ export function WalletBuilder() {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
       if (highlighted) {
-        attemptAddCard(highlighted);
+        if (walletCardIds.has(highlighted.id)) {
+          addDuplicateInstance(highlighted);
+        } else {
+          addCard(highlighted);
+        }
       }
     }
   };
 
   const ctaLabel = useMemo(() => {
     if (selectedCards.length === 0) return "Select a card to continue";
-
     return `Continue with ${selectedCards.length} card${selectedCards.length === 1 ? "" : "s"}`;
   }, [selectedCards.length]);
 
@@ -458,90 +386,29 @@ export function WalletBuilder() {
                   setHighlightedIndex(0);
                 }}
                 onKeyDown={handleResultsKeyDown}
-                placeholder="Search cards (e.g., Platinum, Sapphire)"
-                className={cn(controlClasses, "pl-10 pr-12", rowTransition)}
+                placeholder="Search by card name"
+                autoComplete="off"
+                className={cn(controlClasses, "pl-9", rowTransition)}
               />
-              <div className="absolute inset-y-0 right-3 flex items-center">
-                {query ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetSearchState();
-                      searchInputRef.current?.focus();
-                    }}
-                    className={cn("rounded-md px-1.5 py-0.5 text-white/55 hover:bg-white/10 hover:text-white", rowTransition)}
-                    aria-label="Clear search"
-                  >
-                    ×
-                  </button>
-                ) : (
-                  <span className="text-xs font-medium text-white/40">⌘K</span>
-                )}
-              </div>
             </div>
-            {showLoading ? <p className="mt-2 text-xs text-white/60">Loading cards…</p> : null}
-            {error ? <p className="mt-2 text-xs text-[#F7C948]">{error}</p> : null}
           </div>
 
           {shouldShowResults ? (
-            <Surface
+            <CardResultsList
               className={cn(
-                "mt-3 rounded-xl border-white/10 bg-white/5 opacity-100",
-                "motion-safe:transition motion-safe:duration-200 motion-safe:ease-out",
+                "mt-3",
+                showLoading || error || results.length > 0
+                  ? "translate-y-0 opacity-100"
+                  : "pointer-events-none -translate-y-1 opacity-0",
               )}
-            >
-              {results.length === 0 && !isLoading && !error ? (
-                <p className="px-3 py-3 text-sm text-white/60">No cards found.</p>
-              ) : (
-                <ul className="max-h-96 overflow-auto py-1">
-                  {results.map((card, index) => {
-                    const highlighted = index === highlightedIndex;
-                    const alreadyAdded = selectedCards.some((selected) => selected.cardId === card.id);
-
-                    return (
-                      <li key={`${card.id}-${index}`}>
-                        <div
-                          className={cn(
-                            "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm",
-                            rowTransition,
-                            highlighted
-                              ? "border-[#F7C948]/40 bg-[#F7C948]/12 text-white"
-                              : "text-white/90 hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10 hover:text-white",
-                          )}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate">{card.card_name}</p>
-                            <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
-                          </div>
-                          {alreadyAdded ? (
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs text-white/55">In wallet</span>
-                              <Button
-                                size="sm"
-                                variant="subtle"
-                                onClick={() => addDuplicateInstance(card)}
-                                className="rounded-lg px-2 py-1 text-xs"
-                              >
-                                Add Another
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="subtle"
-                              onClick={() => attemptAddCard(card)}
-                              className="rounded-lg px-2 py-1 text-xs"
-                            >
-                              + Add
-                            </Button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Surface>
+              cards={results}
+              walletCardIds={walletCardIds}
+              onAdd={addCard}
+              onAddAnother={addDuplicateInstance}
+              isLoading={showLoading}
+              error={error}
+              highlightedIndex={highlightedIndex}
+            />
           ) : null}
 
           <Surface
@@ -556,6 +423,7 @@ export function WalletBuilder() {
               <p className="text-xs font-medium uppercase tracking-wide text-white/60">Browse by issuer</p>
               {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
             </div>
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
@@ -563,16 +431,14 @@ export function WalletBuilder() {
                 </label>
                 <select
                   id="issuer-select"
-                  value={activeIssuer ?? "all"}
+                  value={activeIssuer ?? ""}
                   onChange={(event) => {
-                    const nextIssuer = event.target.value === "all" ? null : event.target.value;
+                    const nextIssuer = event.target.value || null;
                     setActiveIssuer(nextIssuer);
-                    setIssuerCardId(null);
-                    setIssuerCardOptions([]);
                   }}
                   className={cn(controlClasses, "appearance-none", rowTransition)}
                 >
-                  <option value="all">All issuers</option>
+                  <option value="">Select an issuer…</option>
                   {enabledIssuers.map((issuer) => (
                     <option key={issuer.id} value={issuer.id}>
                       {issuer.name}
@@ -586,68 +452,60 @@ export function WalletBuilder() {
                 </select>
               </div>
 
-              <div>
-                <label
-                  htmlFor="issuer-card-select"
-                  className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50"
-                >
+              <div className="relative">
+                <label htmlFor="issuer-card-trigger" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
                   Card
                 </label>
-                <select
-                  id="issuer-card-select"
-                  value={issuerCardId ?? ""}
-                  onChange={(event) => {
-                    const selectedCard = issuerCardOptions.find((card) => card.id === event.target.value);
-                    if (!selectedCard) {
-                      setIssuerCardId(null);
-                      return;
-                    }
-
-                    setIssuerCardId(selectedCard.id);
-                    attemptAddCard(selectedCard);
-                    setIssuerCardId(null);
-                  }}
+                <button
+                  ref={issuerTriggerRef}
+                  id="issuer-card-trigger"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded={isIssuerPanelOpen}
+                  aria-controls="issuer-card-panel"
                   disabled={!activeIssuer || issuerCardLoading}
+                  onClick={() => setIsIssuerPanelOpen((prev) => !prev)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setIsIssuerPanelOpen((prev) => !prev);
+                    }
+                  }}
                   className={cn(
                     controlClasses,
-                    "appearance-none disabled:cursor-not-allowed disabled:opacity-60",
+                    "flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-60",
                     rowTransition,
                   )}
                 >
-                  <option value="">Select a card…</option>
-                  {issuerCardOptions.map((card) => (
-                    <option key={card.id} value={card.id}>
-                      {card.card_name}
-                    </option>
-                  ))}
-                </select>
+                  <span>{activeIssuer ? "select a card." : "please select an issuer first"}</span>
+                  <span aria-hidden className={cn("text-white/50", isIssuerPanelOpen && "rotate-180")}>▾</span>
+                </button>
+
+                {isIssuerPanelOpen ? (
+                  <div
+                    ref={issuerPanelRef}
+                    id="issuer-card-panel"
+                    role="dialog"
+                    aria-label="Browse cards by issuer"
+                    className="absolute left-0 right-0 z-40 mt-2"
+                  >
+                    <CardResultsList
+                      cards={issuerCardOptions}
+                      walletCardIds={walletCardIds}
+                      onAdd={addCard}
+                      onAddAnother={addDuplicateInstance}
+                      isLoading={issuerCardLoading}
+                      error={issuerCardError}
+                      emptyMessage="No cards found for this issuer."
+                    />
+                  </div>
+                ) : null}
+
                 {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
                 {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
               </div>
             </div>
           </Surface>
-
-          {pendingDuplicate ? (
-            <Surface className="mt-3 flex items-center justify-between gap-3 rounded-xl border-white/15 px-3 py-2">
-              <p className="text-sm text-white/85" role="status" aria-live="polite">
-                Already in wallet. Add another?
-              </p>
-              <div className="flex items-center gap-2">
-                <Button type="button" onClick={confirmDuplicateAdd} size="sm" variant="subtle" className="rounded-md px-2.5 py-1 text-xs">
-                  Add
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => setPendingDuplicate(null)}
-                  size="sm"
-                  variant="secondary"
-                  className="rounded-md px-2.5 py-1 text-xs"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </Surface>
-          ) : null}
         </Surface>
 
         <Surface as="aside" className="p-4 sm:p-5">
@@ -675,7 +533,9 @@ export function WalletBuilder() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => removeCardInstance(card.instanceId)}
+                      onClick={() =>
+                        setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
+                      }
                       className={cn(
                         "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
                         rowTransition,
