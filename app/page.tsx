@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import Image from "next/image";
+
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14 },
@@ -26,21 +28,19 @@ export default function LandingPage() {
         {/* Header */}
         <header className="flex items-center justify-between">
           <Link href="/" className="group inline-flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#7FB6FF] shadow-[0_0_20px_3px_rgba(127,182,255,0.55)]" />
-            </span>
+           <Image
+  src="/viero1.png"
+  alt="Card Benefits Tracker"
+  width={120}
+  height={120}
+  priority
+/>
             <span className="text-sm font-semibold tracking-wide text-white/90 group-hover:text-white transition-colors">
               Card Benefits Tracker
             </span>
           </Link>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden sm:inline-flex items-center justify-center rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
-            >
-              See it in action
-            </Link>
 
             <Link
               href="/login"
@@ -86,7 +86,7 @@ export default function LandingPage() {
                 href="/login"
                 className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-[#7FB6FF] px-7 py-3.5 text-base font-semibold text-[#08111F] shadow-[0_16px_45px_-18px_rgba(127,182,255,0.75)] hover:brightness-110 active:brightness-95 transition"
               >
-                Sign in with Google
+                Continue with Google
                 <span className="text-[#08111F]/70 group-hover:text-[#08111F] transition">→</span>
               </Link>
 
@@ -104,19 +104,19 @@ export default function LandingPage() {
           {/* Trust tiles */}
           <div className="grid gap-4 md:grid-cols-3">
             <TrustCard
-              title="Free forever — seriously."
-              body="No subscriptions, no paywalls — this stays free."
-              icon={<IconSpark />}
-            />
-            <TrustCard
-              title="No bank logins, no credit card numbers"
-              body="We’ll never ask you to connect bank accounts or enter card numbers."
+              title="No bank logins, no card details."
+              body="We'll never connect to your bank or ask for your credit card details."
               icon={<IconShield />}
             />
             <TrustCard
-              title="Self-entered, fully in your control"
-              body="You pick the cards you have; we track benefits, deadlines, and reminders."
+              title="You stay in control."
+              body="Simply select the cards you own and we'll track your benefits and deadlines."
               icon={<IconWallet />}
+            />
+             <TrustCard
+              title="Free forever — seriously."
+              body="No subscriptions. No trials. No paywalls."
+              icon={<IconFree />}
             />
           </div>
         </section>
@@ -186,6 +186,15 @@ function IconShield() {
         strokeLinejoin="round"
         fill="none"
       />
+    </svg>
+  );
+}
+
+function IconFree() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current" aria-hidden="true">
+      <path d="M20.6 13.4l-7.2 7.2c-.8.8-2 .8-2.8 0L3 13V4h9l8.6 9.4z" />
+      <circle cx="7.5" cy="7.5" r="1.5" className="fill-[#0B1220]" />
     </svg>
   );
 }
