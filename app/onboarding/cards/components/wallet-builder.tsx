@@ -344,10 +344,7 @@ export function WalletBuilder() {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
       if (highlighted) {
-        const alreadyAdded = selectedCards.some((selected) => selected.cardId === highlighted.id);
-        if (!alreadyAdded) {
-          attemptAddCard(highlighted);
-        }
+        attemptAddCard(highlighted);
       }
     }
   };
@@ -525,34 +522,38 @@ export function WalletBuilder() {
 
                       return (
                         <li key={`${card.id}-${index}`}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!alreadyAdded) {
-                                attemptAddCard(card);
-                              }
-                            }}
-                            disabled={alreadyAdded}
+                          <div
                             className={`flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm ${rowTransition} ${
                               highlighted
                                 ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-100"
                                 : "text-slate-200 hover:border-amber-200/20 hover:bg-slate-800/70 hover:text-slate-100"
-                            } ${alreadyAdded ? "opacity-80" : ""}`}
+                            }`}
                           >
                             <div className="min-w-0">
                               <p className="truncate">{card.card_name}</p>
                               <p className="mt-0.5 text-xs text-slate-400">{card.issuer}</p>
                             </div>
                             {alreadyAdded ? (
-                              <span className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
-                                Added ✓
-                              </span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-slate-400">In wallet</span>
+                                <button
+                                  type="button"
+                                  onClick={() => attemptAddCard(card)}
+                                  className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
+                                >
+                                  Add another
+                                </button>
+                              </div>
                             ) : (
-                              <span className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100">
+                              <button
+                                type="button"
+                                onClick={() => attemptAddCard(card)}
+                                className="shrink-0 rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
+                              >
                                 + Add
-                              </span>
+                              </button>
                             )}
-                          </button>
+                          </div>
                         </li>
                       );
                     })}
