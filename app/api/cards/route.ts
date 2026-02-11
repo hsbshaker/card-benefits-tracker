@@ -25,19 +25,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let query = supabase
-    .from("cards")
-    .select("id, issuer, brand, card_name")
-    .eq("issuer", issuer)
-    .order("card_name", { ascending: true });
+  let query = supabase.from("cards").select("id, issuer, brand, network, card_name");
+
+  if (issuer.length > 0) {
+    query = query.eq("issuer", issuer);
+  }
 
   if (q.length > 0) {
-    query = query.ilike("card_name", `%${q}%`);
+    const escapedQuery = q.replace(/[,%]/g, "");
+    query = query.or(
+      `card_name.ilike.%${escapedQuery}%,issuer.ilike.%${escapedQuery}%,brand.ilike.%${escapedQuery}%,network.ilike.%${escapedQuery}%`,
+    );
+  } else {
+    query = query.order("issuer", { ascending: true }).order("card_name", { ascending: true });
   }
 
   const { data, error } = await query;
 
   if (error) {
+    console.error("Failed to fetch cards", {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      issuer,
+      q,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
