@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
+const escapeIlikeValue = (value: string) => value.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const issuerParam = (searchParams.get("issuer") ?? "").trim();

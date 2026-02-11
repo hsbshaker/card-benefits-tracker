@@ -12,16 +12,16 @@ type IssuerOption = {
 type CardResult = {
   id: string;
   issuer: string;
-  brand: string | null;
   card_name: string;
+  network: string | null;
 };
 
 type SelectedCardInstance = {
   instanceId: string;
   cardId: string;
   card_name: string;
-  brand: string | null;
   issuer: string;
+  network: string | null;
 };
 
 type Toast = {
@@ -331,8 +331,8 @@ export function WalletBuilder() {
         instanceId,
         cardId: card.id,
         card_name: card.card_name,
-        brand: card.brand,
         issuer: card.issuer,
+        network: card.network,
       },
     ]);
   };
