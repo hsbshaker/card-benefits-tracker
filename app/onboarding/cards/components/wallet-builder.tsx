@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef, KeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import { useMemo, useState, useEffect, useRef, KeyboardEvent } from "react";
 
 type IssuerOption = {
   id: string;
@@ -42,33 +42,35 @@ export function WalletBuilder() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CardResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCards, setSelectedCards] = useState<SelectedCardInstance[]>([]);
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [issuerCardId, setIssuerCardId] = useState<string | null>(null);
+  const [issuerCardOptions, setIssuerCardOptions] = useState<CardResult[]>([]);
+  const [issuerCardLoading, setIssuerCardLoading] = useState(false);
+  const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
   const [duplicateToast, setDuplicateToast] = useState<DuplicateToastState | null>(null);
 
   const requestAbortRef = useRef<AbortController | null>(null);
-  const moreContainerRef = useRef<HTMLDivElement | null>(null);
-  const moreMenuRef = useRef<HTMLDivElement | null>(null);
-  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
+  const loadingDelayRef = useRef<number | null>(null);
   const normalizedQuery = query.trim();
   const shouldShowResults = normalizedQuery.length >= 1;
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
-  const selectedIssuerLabel =
-    activeIssuer === null
-      ? "All issuers"
-      : ISSUER_OPTIONS.find((option) => option.id === activeIssuer)?.name ?? "All issuers";
-
   const resetSearchState = () => {
     setQuery("");
     setResults([]);
     setError(null);
     setHighlightedIndex(0);
+    setShowLoading(false);
     setIsLoading(false);
+    if (loadingDelayRef.current) {
+      window.clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = null;
+    }
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
   };
@@ -114,9 +116,7 @@ export function WalletBuilder() {
       try {
         const params = new URLSearchParams({ q: normalizedQuery });
 
-        if (activeIssuer) {
-          params.set("issuer", activeIssuer);
-        } else if (enabledIssuers.length === 1) {
+        if (enabledIssuers.length === 1) {
           params.set("issuer", enabledIssuers[0].id);
         }
 
@@ -150,41 +150,7 @@ export function WalletBuilder() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [activeIssuer, enabledIssuers, normalizedQuery, shouldShowResults]);
-
-  useEffect(() => {
-    if (!isMoreMenuOpen) return;
-
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      const target = event.target as Node;
-      if (!moreContainerRef.current?.contains(target)) {
-        setIsMoreMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsMoreMenuOpen(false);
-        moreButtonRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isMoreMenuOpen]);
-
-  useEffect(() => {
-    if (isMoreMenuOpen) {
-      window.setTimeout(() => {
-        moreMenuRef.current?.focus();
-      }, 0);
-    }
-  }, [isMoreMenuOpen]);
+  }, [enabledIssuers, normalizedQuery, shouldShowResults]);
 
   useEffect(() => {
     if (!duplicateToast) return;
@@ -204,6 +170,79 @@ export function WalletBuilder() {
       }
     };
   }, [duplicateToast]);
+
+  useEffect(() => {
+    if (loadingDelayRef.current) {
+      window.clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = null;
+    }
+
+    if (!isLoading) {
+      setShowLoading(false);
+      return;
+    }
+
+    loadingDelayRef.current = window.setTimeout(() => {
+      setShowLoading(true);
+      loadingDelayRef.current = null;
+    }, 200);
+
+    return () => {
+      if (loadingDelayRef.current) {
+        window.clearTimeout(loadingDelayRef.current);
+        loadingDelayRef.current = null;
+      }
+    };
+  }, [isLoading]);
+
+  useEffect(() => {
+    setIssuerCardId(null);
+    setIssuerCardOptions([]);
+    setIssuerCardError(null);
+
+    const selectedIssuer = ISSUER_OPTIONS.find((option) => option.id === activeIssuer);
+    if (!activeIssuer || !selectedIssuer?.enabled) {
+      setIssuerCardLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadIssuerCards = async () => {
+      setIssuerCardLoading(true);
+      try {
+        const params = new URLSearchParams({ issuer: activeIssuer });
+        const response = await fetch(`/api/cards?${params.toString()}`, {
+          method: "GET",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load issuer cards");
+        }
+
+        const data: CardResult[] = await response.json();
+        setIssuerCardOptions(data);
+      } catch (fetchError) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setIssuerCardOptions([]);
+        setIssuerCardError(fetchError instanceof Error ? fetchError.message : "Failed to load issuer cards");
+      } finally {
+        if (!controller.signal.aborted) {
+          setIssuerCardLoading(false);
+        }
+      }
+    };
+
+    loadIssuerCards();
+
+    return () => {
+      controller.abort();
+    };
+  }, [activeIssuer]);
 
   useEffect(() => {
     if (!duplicateToast) return;
@@ -259,47 +298,6 @@ export function WalletBuilder() {
 
   const removeCardInstance = (instanceId: string) => {
     setSelectedCards((prev) => prev.filter((card) => card.instanceId !== instanceId));
-  };
-
-  const handleIssuerClick = (issuerId: string | null) => {
-    setIsMoreMenuOpen(false);
-
-    if (issuerId === activeIssuer) {
-      return;
-    }
-
-    setActiveIssuer(issuerId);
-    resetSearchState();
-  };
-
-  const handleClearIssuer = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-
-    if (activeIssuer === null) {
-      return;
-    }
-
-    setActiveIssuer(null);
-    setIsMoreMenuOpen(false);
-    resetSearchState();
-  };
-
-  const handleMoreButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      setIsMoreMenuOpen((prev) => !prev);
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setIsMoreMenuOpen(false);
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setIsMoreMenuOpen(true);
-    }
   };
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -390,85 +388,74 @@ export function WalletBuilder() {
                   )}
                 </div>
               </div>
-              {isLoading ? <p className="mt-2 text-xs text-slate-400">Loading cards…</p> : null}
+              {showLoading ? <p className="mt-2 text-xs text-slate-400">Loading cards…</p> : null}
               {error ? <p className="mt-2 text-xs text-rose-300">{error}</p> : null}
             </div>
 
-            <div className="relative mt-3" ref={moreContainerRef}>
-              <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">Issuer</label>
-              <button
-                ref={moreButtonRef}
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={isMoreMenuOpen}
-                onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                onKeyDown={handleMoreButtonKeyDown}
-                className={`group flex w-full items-center justify-between rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 hover:border-slate-600 focus:border-cyan-300/70 focus:outline-none focus:ring-2 focus:ring-cyan-300/30 ${rowTransition}`}
-              >
-                <span>{selectedIssuerLabel}</span>
-                <span className="flex items-center gap-2">
-                  {activeIssuer !== null ? (
-                    <button
-                      type="button"
-                      onClick={handleClearIssuer}
-                      className={`rounded px-1 text-slate-400 opacity-0 hover:bg-slate-800 hover:text-slate-100 group-hover:opacity-100 group-focus-within:opacity-100 ${rowTransition}`}
-                      aria-label="Clear issuer filter"
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                  <span className="text-slate-500" aria-hidden>
-                    ▾
-                  </span>
-                </span>
-              </button>
-              {isMoreMenuOpen ? (
-                <div
-                  ref={moreMenuRef}
-                  role="listbox"
-                  tabIndex={-1}
-                  className="absolute left-0 top-full z-20 mt-2 w-full rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-lg shadow-black/30"
-                >
-                  <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-slate-500">Available</p>
-                  <button
-                    type="button"
-                    onClick={() => handleIssuerClick(null)}
-                    className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm ${rowTransition} ${
-                      activeIssuer === null
-                        ? "bg-cyan-400/10 text-cyan-100"
-                        : "text-slate-200 hover:bg-slate-800/80 hover:text-slate-100"
-                    }`}
+            <div className="mt-5 rounded-xl border border-slate-800/70 bg-slate-950/50 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Browse by issuer</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Issuer
+                  </label>
+                  <select
+                    id="issuer-select"
+                    value={activeIssuer ?? "all"}
+                    onChange={(event) => {
+                      const nextIssuer = event.target.value === "all" ? null : event.target.value;
+                      setActiveIssuer(nextIssuer);
+                      setIssuerCardId(null);
+                      setIssuerCardOptions([]);
+                    }}
+                    className={`w-full appearance-none rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30 ${rowTransition}`}
                   >
-                    <span>All issuers</span>
-                    {activeIssuer === null ? <span className="text-cyan-200">✓</span> : null}
-                  </button>
-                  {enabledIssuers.map((issuer) => (
-                    <button
-                      key={issuer.id}
-                      type="button"
-                      onClick={() => handleIssuerClick(issuer.id)}
-                      className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm ${rowTransition} ${
-                        activeIssuer === issuer.id
-                          ? "bg-cyan-400/10 text-cyan-100"
-                          : "text-slate-200 hover:bg-slate-800/80 hover:text-slate-100"
-                      }`}
-                    >
-                      <span>{issuer.name}</span>
-                      {activeIssuer === issuer.id ? <span className="text-cyan-200">✓</span> : null}
-                    </button>
-                  ))}
-                  <div className="my-2 border-t border-slate-700/70" />
-                  <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-slate-500">Coming soon</p>
-                  <div className="space-y-1">
-                    {comingSoonIssuers.map((issuer) => (
-                      <div key={issuer.id} className="flex items-center justify-between rounded-lg px-2 py-2 text-sm text-slate-500">
-                        <span>{issuer.name}</span>
-                        <span className="text-xs italic text-slate-600">Coming soon</span>
-                      </div>
+                    <option value="all">All issuers</option>
+                    {enabledIssuers.map((issuer) => (
+                      <option key={issuer.id} value={issuer.id}>
+                        {issuer.name}
+                      </option>
                     ))}
-                  </div>
+                    {comingSoonIssuers.map((issuer) => (
+                      <option key={issuer.id} value={issuer.id} disabled>
+                        {issuer.name} (Coming soon)
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ) : null}
+
+                <div>
+                  <label htmlFor="issuer-card-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Card
+                  </label>
+                  <select
+                    id="issuer-card-select"
+                    value={issuerCardId ?? ""}
+                    onChange={(event) => {
+                      const selectedCard = issuerCardOptions.find((card) => card.id === event.target.value);
+                      if (!selectedCard) {
+                        setIssuerCardId(null);
+                        return;
+                      }
+
+                      setIssuerCardId(selectedCard.id);
+                      attemptAddCard(selectedCard);
+                      setIssuerCardId(null);
+                    }}
+                    disabled={!activeIssuer || issuerCardLoading}
+                    className={`w-full appearance-none rounded-xl border border-slate-700/70 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-60 ${rowTransition}`}
+                  >
+                    <option value="">Select a card…</option>
+                    {issuerCardOptions.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.card_name}
+                      </option>
+                    ))}
+                  </select>
+                  {issuerCardLoading ? <p className="mt-2 text-xs text-slate-400">Loading issuer cards…</p> : null}
+                  {issuerCardError ? <p className="mt-2 text-xs text-rose-300">{issuerCardError}</p> : null}
+                </div>
+              </div>
             </div>
 
             {duplicateToast ? (
@@ -523,7 +510,7 @@ export function WalletBuilder() {
                           >
                             <div className="min-w-0">
                               <p className="truncate">{card.card_name}</p>
-                              {activeIssuer === null ? <p className="mt-0.5 text-xs text-slate-400">{card.issuer}</p> : null}
+                              <p className="mt-0.5 text-xs text-slate-400">{card.issuer}</p>
                             </div>
                             {alreadyAdded ? (
                               <span className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-xs text-slate-300">
@@ -541,11 +528,7 @@ export function WalletBuilder() {
                   </ul>
                 )}
               </div>
-            ) : (
-              <div className="mt-3 rounded-xl border border-slate-800/70 bg-slate-950/70">
-                <p className="px-3 py-3 text-sm text-slate-400">Start typing to find your card.</p>
-              </div>
-            )}
+            ) : null}
           </section>
 
           <aside className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4 sm:p-4">
