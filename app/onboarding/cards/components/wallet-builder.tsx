@@ -207,7 +207,8 @@ export function WalletBuilder() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to load cards");
+          const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(errorPayload?.error ?? "Failed to load cards");
         }
 
         const data: CardResult[] = await response.json();
@@ -291,7 +292,8 @@ export function WalletBuilder() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to load issuer cards");
+          const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(errorPayload?.error ?? "Failed to load issuer cards");
         }
 
         const data: CardResult[] = await response.json();
