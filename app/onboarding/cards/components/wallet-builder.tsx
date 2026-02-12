@@ -68,6 +68,8 @@ export function WalletBuilder() {
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
+  const issuerHasValue = Boolean(activeIssuer);
+  const cardHasValue = Boolean(selectedIssuerCardId);
 
   const removeToast = (id: string) => {
     const existingTimer = toastTimersRef.current[id];
@@ -123,7 +125,7 @@ export function WalletBuilder() {
     pushToast(`Added another ${card.card_name}.`);
   };
 
-  const resetSearchUI = useCallback(({ focus = false }: { focus?: boolean } = {}) => {
+  const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
     setQuery("");
     setResults([]);
     setError(null);
@@ -133,7 +135,11 @@ export function WalletBuilder() {
     requestSeqRef.current += 1;
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
-    if (focus) searchInputRef.current?.focus();
+    if (focus) {
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -287,12 +293,12 @@ export function WalletBuilder() {
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (searchAreaRef.current?.contains(target)) return;
-      resetSearchUI();
+      resetSearchUI({ focus: false });
     };
 
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      resetSearchUI();
+      resetSearchUI({ focus: false });
     };
 
     document.addEventListener("mousedown", onPointerDown);
@@ -335,7 +341,7 @@ export function WalletBuilder() {
         } else {
           addCard(highlighted);
         }
-        resetSearchUI();
+        resetSearchUI({ focus: true });
       }
     }
   };
@@ -437,11 +443,11 @@ export function WalletBuilder() {
               walletCardIds={walletCardIds}
               onAdd={(card) => {
                 addCard(card);
-                resetSearchUI();
+                resetSearchUI({ focus: true });
               }}
               onAddAnother={(card) => {
                 addDuplicateInstance(card);
-                resetSearchUI();
+                resetSearchUI({ focus: true });
               }}
               isLoading={showLoading}
               error={error}
@@ -474,7 +480,12 @@ export function WalletBuilder() {
                     const nextIssuer = event.target.value || null;
                     setActiveIssuer(nextIssuer);
                   }}
-                  className={cn(controlClasses, "appearance-none", rowTransition, !activeIssuer && "text-white/60")}
+                  className={cn(
+                    controlClasses,
+                    "appearance-none",
+                    rowTransition,
+                    issuerHasValue ? "text-white" : "text-white/50",
+                  )}
                 >
                   <option value="">Select an issuer</option>
                   {enabledIssuers.map((issuer) => (
@@ -499,7 +510,12 @@ export function WalletBuilder() {
                   value={selectedIssuerCardId}
                   onChange={(event) => handleIssuerCardSelect(event.target.value)}
                   disabled={!activeIssuer || issuerCardLoading || issuerCardOptions.length === 0}
-                  className={cn(controlClasses, "appearance-none", rowTransition)}
+                  className={cn(
+                    controlClasses,
+                    "appearance-none",
+                    rowTransition,
+                    cardHasValue ? "text-white" : "text-white/50",
+                  )}
                 >
                   <option value="">{activeIssuer ? "Select a card" : "Please select an issuer"}</option>
                   {issuerCardOptions.map((card) => (
