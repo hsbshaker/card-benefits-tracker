@@ -406,7 +406,7 @@ export function WalletBuilder() {
         <Surface as="section" className="p-4 sm:p-5">
           <div ref={searchAreaRef}>
             <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
-              <b>Search cards</b>
+              <span className="font-semibold">Search cards</span>
             </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40" aria-hidden>
@@ -464,7 +464,9 @@ export function WalletBuilder() {
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/60"><b>Browse by issuer</b></p>
+              <p className="text-xs font-medium uppercase tracking-wide text-white/60">
+                <span className="font-semibold">Browse by issuer</span>
+              </p>
               {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
             </div>
 
@@ -569,11 +571,13 @@ export function WalletBuilder() {
         </Surface>
 
         <Surface as="aside" className="p-4 sm:p-5">
-          <h2 className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60"><b>Viero Wallet</b> ({selectedCards.length})</h2>
+          <h2 className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
+            <span className="font-semibold">Viero Wallet</span> ({selectedCards.length})
+          </h2>
           
 
           {selectedCards.length === 0 ? (
-            <p className="mt-3 px-3 py-4 text-sm text-white/45"><center>Your wallet’s looking a little light...</center></p>
+            <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">Your wallet’s looking a little light...</p>
           ) : (
             <ul className="mt-3 max-h-[22rem] space-y-1 overflow-auto">
               {selectedCards.map((card) => (
