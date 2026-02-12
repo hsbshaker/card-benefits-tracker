@@ -365,11 +365,6 @@ export function WalletBuilder() {
     setSelectedIssuerCardId("");
   };
 
-  const ctaLabel = useMemo(() => {
-    if (selectedCards.length === 0) return "Select a card to continue";
-    return `Add ${selectedCards.length} card${selectedCards.length === 1 ? "" : "s"} to your Viero wallet`;
-  }, [selectedCards.length]);
-
   return (
     <AppShell containerClassName="py-8 sm:py-10">
       <div className="pointer-events-none fixed right-6 top-6 z-50 flex flex-col gap-2">
@@ -576,10 +571,23 @@ export function WalletBuilder() {
         </Surface>
 
         <Surface as="aside" className="flex flex-col p-4 sm:p-5">
-          <h2 className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
-            <span className="font-semibold">Viero Wallet</span> ({selectedCards.length})
-          </h2>
-          
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="block text-xs font-medium uppercase tracking-wide text-white/60">
+              <span className="font-semibold">Viero Wallet</span> ({selectedCards.length})
+            </h2>
+            <Button
+              type="button"
+              size="sm"
+              disabled={selectedCards.length === 0}
+              className={cn(
+                "h-9 rounded-lg px-3 text-sm",
+                selectedCards.length === 0 && "cursor-not-allowed opacity-50",
+              )}
+            >
+              Continue →
+            </Button>
+          </div>
+
 
           {selectedCards.length === 0 ? (
             <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">Your wallet’s looking a little light...</p>
@@ -619,20 +627,6 @@ export function WalletBuilder() {
         </Surface>
       </div>
 
-      <div className="mt-6 border-t border-white/10 pt-4">
-        <Button
-          type="button"
-          disabled={selectedCards.length === 0}
-          size="lg"
-          className={cn(
-            "w-full",
-            selectedCards.length === 0 &&
-              "border border-white/15 bg-white/8 text-white/45 shadow-none hover:brightness-100 active:brightness-100",
-          )}
-        >
-          {ctaLabel}
-        </Button>
-      </div>
     </AppShell>
   );
 }
