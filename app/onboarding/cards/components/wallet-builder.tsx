@@ -39,7 +39,7 @@ const controlClasses =
   "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
 export function WalletBuilder() {
-  const [activeIssuer, setActiveIssuer] = useState<string | null>(null);
+  const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CardResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -68,7 +68,7 @@ export function WalletBuilder() {
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
-  const issuerHasValue = Boolean(activeIssuer);
+  const issuerHasValue = activeIssuer !== "";
   const cardHasValue = Boolean(selectedIssuerCardId);
 
   const removeToast = (id: string) => {
@@ -477,10 +477,14 @@ export function WalletBuilder() {
                 </label>
                 <select
                   id="issuer-select"
-                  value={activeIssuer ?? ""}
+                  value={activeIssuer}
                   onChange={(event) => {
-                    const nextIssuer = event.target.value || null;
+                    const nextIssuer = event.target.value;
                     setActiveIssuer(nextIssuer);
+                    if (nextIssuer === "") {
+                      setSelectedIssuerCardId("");
+                      setPendingIssuerDuplicate(null);
+                    }
                   }}
                   className={cn(
                     controlClasses,
@@ -489,8 +493,8 @@ export function WalletBuilder() {
                     issuerHasValue ? "text-white/95" : "text-white/45",
                   )}
                 >
-                  <option value="" disabled>
-                    Select an Issuer
+                  <option value="">
+                    Select an issuer
                   </option>
                   {enabledIssuers.map((issuer) => (
                     <option key={issuer.id} value={issuer.id}>
@@ -513,16 +517,17 @@ export function WalletBuilder() {
                   id="issuer-card-select"
                   value={selectedIssuerCardId}
                   onChange={(event) => handleIssuerCardSelect(event.target.value)}
-                  disabled={!activeIssuer || issuerCardLoading || issuerCardOptions.length === 0}
+                  disabled={!issuerHasValue}
                   className={cn(
                     controlClasses,
                     "appearance-none",
                     rowTransition,
+                    !issuerHasValue && "cursor-not-allowed border-white/10 bg-white/5 opacity-50",
                     cardHasValue ? "text-white/95" : "text-white/45",
                   )}
                 >
                   <option value="" disabled>
-                    {activeIssuer ? "Select a card" : "Select a Card"}
+                    Select a card
                   </option>
                   {issuerCardOptions.map((card) => (
                     <option key={card.id} value={card.id}>
@@ -579,7 +584,7 @@ export function WalletBuilder() {
           {selectedCards.length === 0 ? (
             <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">Your wallet’s looking a little light...</p>
           ) : (
-            <ul className="mt-3 max-h-[22rem] space-y-1 overflow-auto">
+            <ul className="mt-3 max-h-[22rem] space-y-1 overflow-y-auto pr-1">
               {selectedCards.map((card) => (
                 <li
                   key={card.instanceId}
