@@ -386,7 +386,7 @@ export function WalletBuilder() {
                   setHighlightedIndex(0);
                 }}
                 onKeyDown={handleResultsKeyDown}
-                placeholder="Search by card name"
+                placeholder="Search by credit card (e.g., Sapphire, Platinum)"
                 autoComplete="off"
                 className={cn(controlClasses, "pl-9", rowTransition)}
               />
@@ -438,7 +438,7 @@ export function WalletBuilder() {
                   }}
                   className={cn(controlClasses, "appearance-none", rowTransition)}
                 >
-                  <option value="">Select an issuer…</option>
+                  <option value="">Select an issuer</option>
                   {enabledIssuers.map((issuer) => (
                     <option key={issuer.id} value={issuer.id}>
                       {issuer.name}
@@ -477,7 +477,7 @@ export function WalletBuilder() {
                     rowTransition,
                   )}
                 >
-                  <span>{activeIssuer ? "select a card." : "please select an issuer first"}</span>
+                  <span>{activeIssuer ? "Select a card" : "Please select an issuer"}</span>
                   <span aria-hidden className={cn("text-white/50", isIssuerPanelOpen && "rotate-180")}>▾</span>
                 </button>
 
