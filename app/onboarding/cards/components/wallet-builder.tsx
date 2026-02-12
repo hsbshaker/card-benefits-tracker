@@ -402,8 +402,8 @@ export function WalletBuilder() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <Surface as="section" className="p-4 sm:p-5">
+      <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <Surface as="section" className="self-start p-4 sm:p-5">
           <div ref={searchAreaRef}>
             <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
               <span className="font-semibold">Search cards</span>
@@ -575,7 +575,7 @@ export function WalletBuilder() {
           </div>
         </Surface>
 
-        <Surface as="aside" className="p-4 sm:p-5">
+        <Surface as="aside" className="flex flex-col p-4 sm:p-5">
           <h2 className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
             <span className="font-semibold">Viero Wallet</span> ({selectedCards.length})
           </h2>
@@ -584,35 +584,37 @@ export function WalletBuilder() {
           {selectedCards.length === 0 ? (
             <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">Your wallet’s looking a little light...</p>
           ) : (
-            <ul className="mt-3 max-h-[22rem] space-y-1 overflow-y-auto pr-1">
-              {selectedCards.map((card) => (
-                <li
-                  key={card.instanceId}
-                  className={cn(
-                    "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
-                    "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
-                  )}
-                >
-                  <div className="flex min-w-0 items-center gap-2 text-white/90">
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
-                    <span className="truncate">{card.card_name}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
-                    }
+            <div className="mt-3 max-h-[22rem] flex-1 overflow-y-auto pr-1">
+              <ul className="space-y-1">
+                {selectedCards.map((card) => (
+                  <li
+                    key={card.instanceId}
                     className={cn(
-                      "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
-                      rowTransition,
+                      "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
+                      "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
                     )}
-                    aria-label={`Remove ${card.card_name}`}
                   >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    <div className="flex min-w-0 items-center gap-2 text-white/90">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
+                      <span className="truncate">{card.card_name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
+                      }
+                      className={cn(
+                        "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
+                        rowTransition,
+                      )}
+                      aria-label={`Remove ${card.card_name}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </Surface>
       </div>
