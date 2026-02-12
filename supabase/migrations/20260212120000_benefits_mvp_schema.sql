@@ -8,6 +8,35 @@ alter table if exists public.cards
   add column if not exists display_name text,
   add column if not exists is_business boolean not null default false;
 
+-- Cleanup: drop legacy triggers on public.cards that reference removed column "brand"
+do $$
+declare
+  r record;
+  fn_def text;
+begin
+  for r in
+    select
+      t.tgname,
+      p.oid as func_oid,
+      n.nspname as func_schema,
+      p.proname as func_name,
+      pg_get_function_identity_arguments(p.oid) as func_args
+    from pg_trigger t
+    join pg_proc p on p.oid = t.tgfoid
+    join pg_namespace n on n.oid = p.pronamespace
+    where t.tgrelid = 'public.cards'::regclass
+      and not t.tgisinternal
+  loop
+    fn_def := pg_get_functiondef(r.func_oid);
+
+    if fn_def ilike '%brand%' then
+      execute format('drop trigger if exists %I on public.cards;', r.tgname);
+      execute format('drop function if exists %I.%I(%s);', r.func_schema, r.func_name, r.func_args);
+    end if;
+  end loop;
+end $$;
+
+
 -- Backfill display_name from legacy card_name when present
 update public.cards
 set display_name = card_name
