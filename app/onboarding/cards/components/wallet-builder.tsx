@@ -36,7 +36,7 @@ const ISSUER_OPTIONS: IssuerOption[] = [
 
 const rowTransition = "transition motion-safe:duration-200 ease-out";
 const controlClasses =
-  "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm text-white/95 outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
+  "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
 export function WalletBuilder() {
   const [activeIssuer, setActiveIssuer] = useState<string | null>(null);
@@ -427,7 +427,7 @@ export function WalletBuilder() {
                 onKeyDown={handleResultsKeyDown}
                 placeholder="Search by credit card (e.g., Sapphire, Platinum)"
                 autoComplete="off"
-                className={cn(controlClasses, "pl-9", rowTransition)}
+                className={cn(controlClasses, "pl-9 text-white/95", rowTransition)}
               />
             </div>
 
@@ -455,9 +455,9 @@ export function WalletBuilder() {
             />
           ) : null}
 
-          <Surface
+          <div
             className={cn(
-              "mt-5 rounded-xl border-white/10 bg-white/5 p-3 transition-opacity transition-transform motion-safe:duration-200 ease-out",
+              "mt-5 transition-opacity transition-transform motion-safe:duration-200 ease-out",
               isSearching
                 ? "pointer-events-none translate-y-1 scale-[0.99] opacity-60"
                 : "pointer-events-auto translate-y-0 scale-100 opacity-100",
@@ -484,10 +484,12 @@ export function WalletBuilder() {
                     controlClasses,
                     "appearance-none",
                     rowTransition,
-                    issuerHasValue ? "text-white" : "text-white/50",
+                    issuerHasValue ? "text-white/95" : "text-white/45",
                   )}
                 >
-                  <option value="">Select an issuer</option>
+                  <option value="" disabled>
+                    Select an issuer
+                  </option>
                   {enabledIssuers.map((issuer) => (
                     <option key={issuer.id} value={issuer.id}>
                       {issuer.name}
@@ -514,10 +516,12 @@ export function WalletBuilder() {
                     controlClasses,
                     "appearance-none",
                     rowTransition,
-                    cardHasValue ? "text-white" : "text-white/50",
+                    cardHasValue ? "text-white/95" : "text-white/45",
                   )}
                 >
-                  <option value="">{activeIssuer ? "Select a card" : "Please select an issuer"}</option>
+                  <option value="" disabled>
+                    {activeIssuer ? "Select a card" : "Please select an issuer"}
+                  </option>
                   {issuerCardOptions.map((card) => (
                     <option key={card.id} value={card.id}>
                       {card.card_name}
@@ -560,7 +564,7 @@ export function WalletBuilder() {
                 ) : null}
               </div>
             </div>
-          </Surface>
+          </div>
           </div>
         </Surface>
 
@@ -570,41 +574,39 @@ export function WalletBuilder() {
             <p className="mt-1 text-xs text-white/60">No cards added yet. Add at least one card to continue.</p>
           ) : null}
 
-          <Surface className="mt-3 rounded-xl border-white/10 bg-white/5">
-            {selectedCards.length === 0 ? (
-              <p className="px-3 py-4 text-sm text-white/45">No cards added yet.</p>
-            ) : (
-              <ul className="max-h-[22rem] space-y-1 overflow-auto p-2">
-                {selectedCards.map((card) => (
-                  <li
-                    key={card.instanceId}
+          {selectedCards.length === 0 ? (
+            <p className="mt-3 px-3 py-4 text-sm text-white/45">No cards added yet.</p>
+          ) : (
+            <ul className="mt-3 max-h-[22rem] space-y-1 overflow-auto">
+              {selectedCards.map((card) => (
+                <li
+                  key={card.instanceId}
+                  className={cn(
+                    "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
+                    "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
+                  )}
+                >
+                  <div className="flex min-w-0 items-center gap-2 text-white/90">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
+                    <span className="truncate">{card.card_name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
+                    }
                     className={cn(
-                      "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
-                      "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
+                      "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
+                      rowTransition,
                     )}
+                    aria-label={`Remove ${card.card_name}`}
                   >
-                    <div className="flex min-w-0 items-center gap-2 text-white/90">
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
-                      <span className="truncate">{card.card_name}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
-                      }
-                      className={cn(
-                        "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
-                        rowTransition,
-                      )}
-                      aria-label={`Remove ${card.card_name}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Surface>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </Surface>
       </div>
 
