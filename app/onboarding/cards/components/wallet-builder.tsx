@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -50,15 +50,15 @@ export function WalletBuilder() {
   const [issuerCardOptions, setIssuerCardOptions] = useState<CardResult[]>([]);
   const [issuerCardLoading, setIssuerCardLoading] = useState(false);
   const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
-  const [isIssuerPanelOpen, setIsIssuerPanelOpen] = useState(false);
+  const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
+  const [pendingIssuerDuplicate, setPendingIssuerDuplicate] = useState<CardResult | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
   const latestQueryRef = useRef<string>("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const issuerPanelRef = useRef<HTMLDivElement | null>(null);
-  const issuerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const toastTimersRef = useRef<Record<string, number>>({});
   const loadingDelayRef = useRef<number | null>(null);
 
@@ -122,6 +122,19 @@ export function WalletBuilder() {
     addCardInstance(card);
     pushToast(`Added another ${card.card_name}.`);
   };
+
+  const resetSearchUI = useCallback(({ focus = false }: { focus?: boolean } = {}) => {
+    setQuery("");
+    setResults([]);
+    setError(null);
+    setIsLoading(false);
+    setShowLoading(false);
+    setHighlightedIndex(0);
+    requestSeqRef.current += 1;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    if (focus) searchInputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     searchInputRef.current?.focus();
@@ -229,7 +242,8 @@ export function WalletBuilder() {
   useEffect(() => {
     setIssuerCardOptions([]);
     setIssuerCardError(null);
-    setIsIssuerPanelOpen(false);
+    setSelectedIssuerCardId("");
+    setPendingIssuerDuplicate(null);
 
     const selectedIssuer = ISSUER_OPTIONS.find((option) => option.id === activeIssuer);
     if (!activeIssuer || !selectedIssuer?.enabled) {
@@ -268,28 +282,27 @@ export function WalletBuilder() {
   }, [activeIssuer]);
 
   useEffect(() => {
-    if (!isIssuerPanelOpen) return;
+    if (!isSearching && !shouldShowResults) return;
 
-    const handlePointerDown = (event: MouseEvent) => {
+    const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (issuerPanelRef.current?.contains(target) || issuerTriggerRef.current?.contains(target)) return;
-      setIsIssuerPanelOpen(false);
+      if (searchAreaRef.current?.contains(target)) return;
+      resetSearchUI();
     };
 
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setIsIssuerPanelOpen(false);
-      issuerTriggerRef.current?.focus();
+      resetSearchUI();
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
     };
-  }, [isIssuerPanelOpen]);
+  }, [isSearching, shouldShowResults, resetSearchUI]);
 
   useEffect(() => {
     return () => {
@@ -322,8 +335,28 @@ export function WalletBuilder() {
         } else {
           addCard(highlighted);
         }
+        resetSearchUI();
       }
     }
+  };
+
+  const handleIssuerCardSelect = (nextCardId: string) => {
+    setSelectedIssuerCardId(nextCardId);
+    if (!nextCardId) {
+      setPendingIssuerDuplicate(null);
+      return;
+    }
+
+    const nextCard = issuerCardOptions.find((card) => card.id === nextCardId);
+    if (!nextCard) return;
+
+    if (walletCardIds.has(nextCard.id)) {
+      setPendingIssuerDuplicate(nextCard);
+      return;
+    }
+
+    addCard(nextCard);
+    setSelectedIssuerCardId("");
   };
 
   const ctaLabel = useMemo(() => {
@@ -365,7 +398,7 @@ export function WalletBuilder() {
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Surface as="section" className="p-4 sm:p-5">
-          <div>
+          <div ref={searchAreaRef}>
             <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
               Search cards
             </label>
@@ -403,8 +436,14 @@ export function WalletBuilder() {
               )}
               cards={results}
               walletCardIds={walletCardIds}
-              onAdd={addCard}
-              onAddAnother={addDuplicateInstance}
+              onAdd={(card) => {
+                addCard(card);
+                resetSearchUI();
+              }}
+              onAddAnother={(card) => {
+                addDuplicateInstance(card);
+                resetSearchUI();
+              }}
               isLoading={showLoading}
               error={error}
               highlightedIndex={highlightedIndex}
@@ -452,57 +491,58 @@ export function WalletBuilder() {
                 </select>
               </div>
 
-              <div className="relative">
-                <label htmlFor="issuer-card-trigger" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
+              <div>
+                <label htmlFor="issuer-card-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
                   Card
                 </label>
-                <button
-                  ref={issuerTriggerRef}
-                  id="issuer-card-trigger"
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-expanded={isIssuerPanelOpen}
-                  aria-controls="issuer-card-panel"
-                  disabled={!activeIssuer || issuerCardLoading}
-                  onClick={() => setIsIssuerPanelOpen((prev) => !prev)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setIsIssuerPanelOpen((prev) => !prev);
-                    }
-                  }}
-                  className={cn(
-                    controlClasses,
-                    "flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-60",
-                    rowTransition,
-                  )}
+                <select
+                  id="issuer-card-select"
+                  value={selectedIssuerCardId}
+                  onChange={(event) => handleIssuerCardSelect(event.target.value)}
+                  disabled={!activeIssuer || issuerCardLoading || issuerCardOptions.length === 0}
+                  className={cn(controlClasses, "appearance-none", rowTransition)}
                 >
-                  <span>{activeIssuer ? "Select a card" : "Please select an issuer"}</span>
-                  <span aria-hidden className={cn("text-white/50", isIssuerPanelOpen && "rotate-180")}>▾</span>
-                </button>
-
-                {isIssuerPanelOpen ? (
-                  <div
-                    ref={issuerPanelRef}
-                    id="issuer-card-panel"
-                    role="dialog"
-                    aria-label="Browse cards by issuer"
-                    className="absolute left-0 right-0 z-40 mt-2"
-                  >
-                    <CardResultsList
-                      cards={issuerCardOptions}
-                      walletCardIds={walletCardIds}
-                      onAdd={addCard}
-                      onAddAnother={addDuplicateInstance}
-                      isLoading={issuerCardLoading}
-                      error={issuerCardError}
-                      emptyMessage="No cards found for this issuer."
-                    />
-                  </div>
-                ) : null}
+                  <option value="">{activeIssuer ? "Select a card" : "Please select an issuer"}</option>
+                  {issuerCardOptions.map((card) => (
+                    <option key={card.id} value={card.id}>
+                      {card.card_name}
+                    </option>
+                  ))}
+                </select>
 
                 {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
                 {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
+                {pendingIssuerDuplicate ? (
+                  <Surface className="mt-3 rounded-xl border-[#F7C948]/30 bg-white/8 p-3">
+                    <p className="text-sm text-white/90">
+                      {pendingIssuerDuplicate.card_name} is already in your wallet. Add another?
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setPendingIssuerDuplicate(null);
+                          setSelectedIssuerCardId("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          addDuplicateInstance(pendingIssuerDuplicate);
+                          setPendingIssuerDuplicate(null);
+                          setSelectedIssuerCardId("");
+                        }}
+                      >
+                        Add another
+                      </Button>
+                    </div>
+                  </Surface>
+                ) : null}
               </div>
             </div>
           </Surface>
