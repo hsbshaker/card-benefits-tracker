@@ -424,7 +424,6 @@ export function WalletBuilder() {
                 className={cn(controlClasses, "pl-9", rowTransition)}
               />
             </div>
-          </div>
 
           {shouldShowResults ? (
             <CardResultsList
@@ -475,7 +474,7 @@ export function WalletBuilder() {
                     const nextIssuer = event.target.value || null;
                     setActiveIssuer(nextIssuer);
                   }}
-                  className={cn(controlClasses, "appearance-none", rowTransition)}
+                  className={cn(controlClasses, "appearance-none", rowTransition, !activeIssuer && "text-white/60")}
                 >
                   <option value="">Select an issuer</option>
                   {enabledIssuers.map((issuer) => (
