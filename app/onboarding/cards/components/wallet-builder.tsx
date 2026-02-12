@@ -381,8 +381,6 @@ export function WalletBuilder() {
           .from("cards")
           .select("id, product_key")
           .eq("product_key", selected.product_key)
-          .order("created_at", { ascending: false })
-          .limit(1)
           .maybeSingle();
 
         if (error) {
@@ -395,35 +393,6 @@ export function WalletBuilder() {
         }
 
         return { id: selected.cardId, product_key: selected.product_key };
-      }
-
-      const preferredName = selected.display_name ?? selected.card_name;
-
-      const resolveByName = async (column: "display_name" | "card_name", value: string) => {
-        const { data, error } = await supabase
-          .from("cards")
-          .select("id, product_key")
-          .eq(column, value)
-          .order("product_key", { ascending: false, nullsFirst: false })
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        if (error) {
-          console.error(`Failed to resolve card by ${column}`, error);
-          return null;
-        }
-
-        return data?.[0] ?? null;
-      };
-
-      const byDisplayName = preferredName ? await resolveByName("display_name", preferredName) : null;
-      if (byDisplayName?.id) {
-        return { id: byDisplayName.id, product_key: byDisplayName.product_key };
-      }
-
-      const byCardName = selected.card_name ? await resolveByName("card_name", selected.card_name) : null;
-      if (byCardName?.id) {
-        return { id: byCardName.id, product_key: byCardName.product_key };
       }
 
       return { id: selected.cardId, product_key: selected.product_key };

@@ -135,10 +135,12 @@ export function BenefitsOnboarding() {
       return;
     }
 
-    const wallet = (walletRows ?? []) as Array<{
+    type WalletRow = {
       card_id: string;
       cards: { id: string; card_name: string; display_name: string | null; product_key: string | null; issuer: string; network: string | null };
-    }>;
+    };
+
+    const wallet = (walletRows ?? []) as WalletRow[];
 
     if (wallet.length === 0) {
       setCards([]);
@@ -147,7 +149,109 @@ export function BenefitsOnboarding() {
       return;
     }
 
-    const cardIds = wallet.map((row) => row.card_id);
+    const productKeys = Array.from(new Set(wallet.map((row) => row.cards.product_key).filter((value): value is string => Boolean(value))));
+
+    let canonicalIdByProductKey = new Map<string, string>();
+    if (productKeys.length > 0) {
+      const { data: canonicalCardRows, error: canonicalCardsError } = await supabase
+        .from("cards")
+        .select("id, product_key")
+        .in("product_key", productKeys);
+
+      if (canonicalCardsError) {
+        console.error("Failed to load canonical cards", canonicalCardsError);
+      } else {
+        canonicalIdByProductKey = new Map(
+          (canonicalCardRows ?? [])
+            .filter((row): row is { id: string; product_key: string } => Boolean(row.product_key && row.id))
+            .map((row) => [row.product_key, row.id]),
+        );
+      }
+    }
+
+    const walletRepairRows = wallet
+      .map((row) => {
+        const productKey = row.cards.product_key;
+        const canonicalId = productKey ? canonicalIdByProductKey.get(productKey) ?? null : null;
+        return {
+          row,
+          productKey,
+          canonicalId,
+          needsRepair: Boolean(canonicalId && canonicalId !== row.card_id),
+        };
+      })
+      .filter((entry) => entry.needsRepair);
+
+    if (walletRepairRows.length > 0) {
+      for (const repair of walletRepairRows) {
+        const canonicalId = repair.canonicalId;
+        if (!canonicalId) continue;
+
+        const { error: insertCanonicalError } = await supabase.from("user_cards").upsert(
+          {
+            user_id: user.id,
+            card_id: canonicalId,
+          },
+          { onConflict: "user_id,card_id", ignoreDuplicates: true },
+        );
+
+        if (insertCanonicalError) {
+          console.error("Failed to insert canonical wallet row", insertCanonicalError);
+          continue;
+        }
+
+        const { error: deleteOldError } = await supabase
+          .from("user_cards")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("card_id", repair.row.card_id);
+
+        if (deleteOldError) {
+          console.error("Failed to delete duplicate wallet row", deleteOldError);
+        }
+      }
+    }
+
+    const { data: refreshedWalletRows, error: refreshedWalletError } = await supabase
+      .from("user_cards")
+      .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
+      .eq("user_id", user.id);
+
+    if (refreshedWalletError) {
+      console.error("Failed to reload wallet cards", refreshedWalletError);
+    }
+
+    const walletForView =
+      refreshedWalletError || !refreshedWalletRows
+        ? wallet.map((row) => {
+            const productKey = row.cards.product_key;
+            const canonicalId = productKey ? canonicalIdByProductKey.get(productKey) ?? row.card_id : row.card_id;
+            return {
+              ...row,
+              card_id: canonicalId,
+              cards: {
+                ...row.cards,
+                id: canonicalId,
+              },
+            };
+          })
+        : ((refreshedWalletRows as WalletRow[]).map((row) => {
+            const productKey = row.cards.product_key;
+            const canonicalId = productKey ? canonicalIdByProductKey.get(productKey) ?? row.card_id : row.card_id;
+            return {
+              ...row,
+              card_id: canonicalId,
+              cards: {
+                ...row.cards,
+                id: canonicalId,
+              },
+            };
+          }) as WalletRow[]);
+
+    const walletByCanonicalCardId = new Map(walletForView.map((row) => [row.card_id, row]));
+    const dedupedWallet = Array.from(walletByCanonicalCardId.values());
+
+    const cardIds = dedupedWallet.map((row) => row.card_id);
     const { data: cardBenefitRows, error: cardBenefitsError } = await supabase
       .from("card_benefits")
       .select(
@@ -183,10 +287,11 @@ export function BenefitsOnboarding() {
         benefitCountByCard.set(row.card_id, (benefitCountByCard.get(row.card_id) ?? 0) + 1);
       }
 
-      for (const walletCard of wallet) {
+      for (const walletCard of dedupedWallet) {
         console.debug("[benefits-onboarding] card benefit match", {
           card_id: walletCard.card_id,
           product_key: walletCard.cards.product_key,
+          canonical_id: walletCard.cards.product_key ? (canonicalIdByProductKey.get(walletCard.cards.product_key) ?? null) : null,
           matched_benefits: benefitCountByCard.get(walletCard.card_id) ?? 0,
         });
       }
@@ -210,7 +315,7 @@ export function BenefitsOnboarding() {
     const userBenefitMap = new Map((userBenefitRows ?? []).map((row) => [row.benefit_id, row]));
 
     const cardsMissingUserBenefits = new Set<string>();
-    for (const card of wallet) {
+    for (const card of dedupedWallet) {
       const cardBenefitIds = cardBenefits.filter((row) => row.card_id === card.card_id).map((row) => row.benefit_id);
       if (cardBenefitIds.some((benefitId) => !userBenefitMap.has(benefitId))) {
         cardsMissingUserBenefits.add(card.card_id);
@@ -267,7 +372,7 @@ export function BenefitsOnboarding() {
 
     const periodStatusMap = new Map((periodRows ?? []).map((row) => [`${row.benefit_id}:${row.period_key}`, row]));
 
-    const nextCards: CardGroup[] = wallet
+    const nextCards: CardGroup[] = dedupedWallet
       .map((walletCard) => {
         const benefitsForCard = cardBenefits
           .filter((cb) => cb.card_id === walletCard.card_id)
