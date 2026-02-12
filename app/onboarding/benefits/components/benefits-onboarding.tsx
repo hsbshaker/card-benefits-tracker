@@ -88,6 +88,7 @@ export function BenefitsOnboarding() {
   const [cards, setCards] = useState<CardGroup[]>([]);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const hasLoggedRepairWarningRef = useRef(false);
 
   const pushToast = (message: string) => {
     const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
@@ -181,6 +182,17 @@ export function BenefitsOnboarding() {
         };
       })
       .filter((entry) => entry.needsRepair);
+
+    if (walletRepairRows.length > 0 && !hasLoggedRepairWarningRef.current) {
+      hasLoggedRepairWarningRef.current = true;
+      console.warn("[benefits-onboarding] repaired non-canonical wallet card ids", {
+        repairs: walletRepairRows.map((repair) => ({
+          product_key: repair.productKey,
+          wrong_card_id: repair.row.card_id,
+          canonical_card_id: repair.canonicalId,
+        })),
+      });
+    }
 
     if (walletRepairRows.length > 0) {
       for (const repair of walletRepairRows) {
