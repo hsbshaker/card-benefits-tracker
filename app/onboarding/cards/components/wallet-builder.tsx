@@ -545,48 +545,48 @@ export function WalletBuilder() {
               </div>
             </div>
           </Surface>
-        </Surface>
 
-        <Surface as="aside" className="p-4 sm:p-5">
-          <h2 className="text-sm font-medium text-white/90">Digital Wallet ({selectedCards.length})</h2>
-          {selectedCards.length === 0 ? (
-            <p className="mt-1 text-xs text-white/60">No cards added yet. Add at least one card to continue.</p>
-          ) : null}
-
-          <Surface className="mt-3 rounded-xl border-white/10 bg-white/5">
+          <Surface as="aside" className="p-4 sm:p-5">
+            <h2 className="text-sm font-medium text-white/90">Digital Wallet ({selectedCards.length})</h2>
             {selectedCards.length === 0 ? (
-              <p className="px-3 py-4 text-sm text-white/45">No cards added yet.</p>
-            ) : (
-              <ul className="max-h-[22rem] space-y-1 overflow-auto p-2">
-                {selectedCards.map((card) => (
-                  <li
-                    key={card.instanceId}
-                    className={cn(
-                      "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
-                      "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
-                    )}
-                  >
-                    <div className="flex min-w-0 items-center gap-2 text-white/90">
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
-                      <span className="truncate">{card.card_name}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
-                      }
+              <p className="mt-1 text-xs text-white/60">No cards added yet. Add at least one card to continue.</p>
+            ) : null}
+
+            <Surface className="mt-3 rounded-xl border-white/10 bg-white/5">
+              {selectedCards.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-white/45">No cards added yet.</p>
+              ) : (
+                <ul className="max-h-[22rem] space-y-1 overflow-auto p-2">
+                  {selectedCards.map((card) => (
+                    <li
+                      key={card.instanceId}
                       className={cn(
-                        "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
-                        rowTransition,
+                        "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
+                        "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
                       )}
-                      aria-label={`Remove ${card.card_name}`}
                     >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <div className="flex min-w-0 items-center gap-2 text-white/90">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
+                        <span className="truncate">{card.card_name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
+                        }
+                        className={cn(
+                          "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
+                          rowTransition,
+                        )}
+                        aria-label={`Remove ${card.card_name}`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Surface>
           </Surface>
         </Surface>
       </div>
