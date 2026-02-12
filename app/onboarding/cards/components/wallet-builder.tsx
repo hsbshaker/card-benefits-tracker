@@ -381,15 +381,17 @@ export function WalletBuilder() {
           .from("cards")
           .select("id, product_key")
           .eq("product_key", selected.product_key)
-          .maybeSingle();
+          .order("id", { ascending: true })
+          .limit(1);
 
         if (error) {
           console.error("Failed to resolve card by product_key", error);
           return { id: selected.cardId, product_key: selected.product_key };
         }
 
-        if (data?.id) {
-          return { id: data.id, product_key: data.product_key };
+        const canonicalCard = data?.[0];
+        if (canonicalCard?.id) {
+          return { id: canonicalCard.id, product_key: canonicalCard.product_key };
         }
 
         return { id: selected.cardId, product_key: selected.product_key };
