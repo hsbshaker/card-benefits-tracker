@@ -27,7 +27,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let query = supabase.from("cards").select("id, issuer, card_name, network, created_at, updated_at");
+  let query = supabase
+    .from("cards")
+    .select("id, issuer, card_name, display_name, network, product_key, created_at, updated_at")
+    .order("product_key", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
 
   if (issuer.length > 0) {
     query = query.eq("issuer", issuer);
@@ -36,10 +40,8 @@ export async function GET(request: Request) {
   if (q.length > 0) {
     const escapedQuery = escapeIlikeValue(q);
     query = query.or(
-      `card_name.ilike.%${escapedQuery}%,issuer.ilike.%${escapedQuery}%,network.ilike.%${escapedQuery}%`,
+      `card_name.ilike.%${escapedQuery}%,display_name.ilike.%${escapedQuery}%,issuer.ilike.%${escapedQuery}%,network.ilike.%${escapedQuery}%`,
     );
-  } else {
-    query = query.order("issuer", { ascending: true }).order("card_name", { ascending: true });
   }
 
   const { data, error } = await query;

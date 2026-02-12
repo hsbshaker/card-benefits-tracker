@@ -6,7 +6,9 @@ export type CardResult = {
   id: string;
   issuer: string;
   card_name: string;
+  display_name: string | null;
   network: string | null;
+  product_key: string | null;
 };
 
 type CardResultsListProps = {
@@ -67,7 +69,7 @@ export function CardResultsList({
                     )}
                   >
                     <div className="min-w-0">
-                      <p className="truncate">{card.card_name}</p>
+                      <p className="truncate">{card.display_name ?? card.card_name}</p>
                       <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
                     </div>
                     {alreadyAdded ? (
