@@ -19,7 +19,9 @@ type IssuerOption = {
 type SelectedCardInstance = {
   instanceId: string;
   cardId: string;
+  product_key: string | null;
   card_name: string;
+  display_name: string | null;
   issuer: string;
   network: string | null;
 };
@@ -113,7 +115,9 @@ export function WalletBuilder() {
       {
         instanceId,
         cardId: card.id,
+        product_key: card.product_key,
         card_name: card.card_name,
+        display_name: card.display_name,
         issuer: card.issuer,
         network: card.network,
       },
@@ -127,7 +131,7 @@ export function WalletBuilder() {
 
   const addDuplicateInstance = (card: CardResult) => {
     addCardInstance(card);
-    pushToast(`Added another ${card.card_name}.`);
+    pushToast(`Added another ${card.display_name ?? card.card_name}.`);
   };
 
   const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
@@ -370,6 +374,63 @@ export function WalletBuilder() {
     setSelectedIssuerCardId("");
   };
 
+  const resolveCanonicalCard = useCallback(
+    async (selected: SelectedCardInstance): Promise<{ id: string; product_key: string | null } | null> => {
+      if (selected.product_key) {
+        const { data, error } = await supabase
+          .from("cards")
+          .select("id, product_key")
+          .eq("product_key", selected.product_key)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Failed to resolve card by product_key", error);
+          return { id: selected.cardId, product_key: selected.product_key };
+        }
+
+        if (data?.id) {
+          return { id: data.id, product_key: data.product_key };
+        }
+
+        return { id: selected.cardId, product_key: selected.product_key };
+      }
+
+      const preferredName = selected.display_name ?? selected.card_name;
+
+      const resolveByName = async (column: "display_name" | "card_name", value: string) => {
+        const { data, error } = await supabase
+          .from("cards")
+          .select("id, product_key")
+          .eq(column, value)
+          .order("product_key", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error(`Failed to resolve card by ${column}`, error);
+          return null;
+        }
+
+        return data?.[0] ?? null;
+      };
+
+      const byDisplayName = preferredName ? await resolveByName("display_name", preferredName) : null;
+      if (byDisplayName?.id) {
+        return { id: byDisplayName.id, product_key: byDisplayName.product_key };
+      }
+
+      const byCardName = selected.card_name ? await resolveByName("card_name", selected.card_name) : null;
+      if (byCardName?.id) {
+        return { id: byCardName.id, product_key: byCardName.product_key };
+      }
+
+      return { id: selected.cardId, product_key: selected.product_key };
+    },
+    [supabase],
+  );
+
   const handleContinue = async () => {
     if (selectedCards.length === 0 || isSaving) return;
 
@@ -387,7 +448,8 @@ export function WalletBuilder() {
         return;
       }
 
-      const uniqueCardIds = Array.from(new Set(selectedCards.map((card) => card.cardId)));
+      const resolvedCards = await Promise.all(selectedCards.map((card) => resolveCanonicalCard(card)));
+      const uniqueCardIds = Array.from(new Set(resolvedCards.filter((card): card is { id: string; product_key: string | null } => Boolean(card?.id)).map((card) => card.id)));
       if (uniqueCardIds.length === 0) return;
 
       const { data: existingRows, error: existingError } = await supabase
@@ -473,7 +535,7 @@ export function WalletBuilder() {
         <p className="text-xs font-medium uppercase tracking-wide text-white/55">Step 1 of 2 — Add your cards</p>
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Add cards</h1>
         <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
-          Time to flex your lineup — let's see what cards you're working with
+          Time to flex your lineup — let&apos;s see what cards you&apos;re working with
         </p>
       </div>
 
@@ -606,7 +668,7 @@ export function WalletBuilder() {
                   </option>
                   {issuerCardOptions.map((card) => (
                     <option key={card.id} value={card.id}>
-                      {card.card_name}
+                      {card.display_name ?? card.card_name}
                     </option>
                   ))}
                 </select>
@@ -616,7 +678,7 @@ export function WalletBuilder() {
                 {pendingIssuerDuplicate ? (
                   <Surface className="mt-3 rounded-xl border-[#F7C948]/30 bg-white/8 p-3">
                     <p className="text-sm text-white/90">
-                      {pendingIssuerDuplicate.card_name} is already in your wallet. Add another?
+                      {pendingIssuerDuplicate.display_name ?? pendingIssuerDuplicate.card_name} is already in your wallet. Add another?
                     </p>
                     <div className="mt-3 flex gap-2">
                       <Button
@@ -685,7 +747,7 @@ export function WalletBuilder() {
                   >
                     <div className="flex min-w-0 items-center gap-2 text-white/90">
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
-                      <span className="truncate">{card.card_name}</span>
+                      <span className="truncate">{card.display_name ?? card.card_name}</span>
                     </div>
                     <button
                       type="button"
@@ -696,7 +758,7 @@ export function WalletBuilder() {
                         "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
                         rowTransition,
                       )}
-                      aria-label={`Remove ${card.card_name}`}
+                      aria-label={`Remove ${card.display_name ?? card.card_name}`}
                     >
                       ×
                     </button>

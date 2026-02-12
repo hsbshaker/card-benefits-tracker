@@ -30,6 +30,7 @@ type BenefitRow = {
 type CardGroup = {
   cardId: string;
   cardName: string;
+  productKey: string | null;
   issuer: string;
   network: string | null;
   benefits: BenefitRow[];
@@ -124,7 +125,7 @@ export function BenefitsOnboarding() {
 
     const { data: walletRows, error: walletError } = await supabase
       .from("user_cards")
-      .select("card_id, cards!inner(id, card_name, issuer, network)")
+      .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
       .eq("user_id", user.id);
 
     if (walletError) {
@@ -136,7 +137,7 @@ export function BenefitsOnboarding() {
 
     const wallet = (walletRows ?? []) as Array<{
       card_id: string;
-      cards: { id: string; card_name: string; issuer: string; network: string | null };
+      cards: { id: string; card_name: string; display_name: string | null; product_key: string | null; issuer: string; network: string | null };
     }>;
 
     if (wallet.length === 0) {
@@ -174,6 +175,22 @@ export function BenefitsOnboarding() {
         notes: string | null;
       };
     }>;
+
+
+    if (process.env.NODE_ENV !== "production") {
+      const benefitCountByCard = new Map<string, number>();
+      for (const row of cardBenefits) {
+        benefitCountByCard.set(row.card_id, (benefitCountByCard.get(row.card_id) ?? 0) + 1);
+      }
+
+      for (const walletCard of wallet) {
+        console.debug("[benefits-onboarding] card benefit match", {
+          card_id: walletCard.card_id,
+          product_key: walletCard.cards.product_key,
+          matched_benefits: benefitCountByCard.get(walletCard.card_id) ?? 0,
+        });
+      }
+    }
 
     const benefitIds = Array.from(new Set(cardBenefits.map((row) => row.benefit_id)));
 
@@ -284,7 +301,8 @@ export function BenefitsOnboarding() {
 
         return {
           cardId: walletCard.card_id,
-          cardName: walletCard.cards.card_name,
+          cardName: walletCard.cards.display_name ?? walletCard.cards.card_name,
+          productKey: walletCard.cards.product_key,
           issuer: walletCard.cards.issuer,
           network: walletCard.cards.network,
           benefits: benefitsForCard,
