@@ -367,7 +367,7 @@ export function WalletBuilder() {
 
   const ctaLabel = useMemo(() => {
     if (selectedCards.length === 0) return "Select a card to continue";
-    return `Continue with ${selectedCards.length} card${selectedCards.length === 1 ? "" : "s"}`;
+    return `Add ${selectedCards.length} card${selectedCards.length === 1 ? "" : "s"} to your Viero wallet`;
   }, [selectedCards.length]);
 
   return (
@@ -398,7 +398,7 @@ export function WalletBuilder() {
         <p className="text-xs font-medium uppercase tracking-wide text-white/55">Step 1 of 2 — Add your cards</p>
         <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Add cards</h1>
         <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
-          Build your digital wallet with your cards.
+          Time to flex your lineup — let's see what cards you're working with
         </p>
       </div>
 
@@ -406,7 +406,7 @@ export function WalletBuilder() {
         <Surface as="section" className="p-4 sm:p-5">
           <div ref={searchAreaRef}>
             <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
-              Search cards
+              <b>Search cards</b>
             </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40" aria-hidden>
@@ -464,7 +464,7 @@ export function WalletBuilder() {
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/60">Browse by issuer</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-white/60"><b>Browse by issuer</b></p>
               {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
             </div>
 
@@ -488,7 +488,7 @@ export function WalletBuilder() {
                   )}
                 >
                   <option value="" disabled>
-                    Select an issuer
+                    Select an Issuer
                   </option>
                   {enabledIssuers.map((issuer) => (
                     <option key={issuer.id} value={issuer.id}>
@@ -520,7 +520,7 @@ export function WalletBuilder() {
                   )}
                 >
                   <option value="" disabled>
-                    {activeIssuer ? "Select a card" : "Please select an issuer"}
+                    {activeIssuer ? "Select a card" : "Select a Card"}
                   </option>
                   {issuerCardOptions.map((card) => (
                     <option key={card.id} value={card.id}>
@@ -569,13 +569,11 @@ export function WalletBuilder() {
         </Surface>
 
         <Surface as="aside" className="p-4 sm:p-5">
-          <h2 className="text-sm font-medium text-white/90">Digital Wallet ({selectedCards.length})</h2>
-          {selectedCards.length === 0 ? (
-            <p className="mt-1 text-xs text-white/60">No cards added yet. Add at least one card to continue.</p>
-          ) : null}
+          <h2 className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60"><b>Viero Wallet</b> ({selectedCards.length})</h2>
+          
 
           {selectedCards.length === 0 ? (
-            <p className="mt-3 px-3 py-4 text-sm text-white/45">No cards added yet.</p>
+            <p className="mt-3 px-3 py-4 text-sm text-white/45"><center>Your wallet’s looking a little light...</center></p>
           ) : (
             <ul className="mt-3 max-h-[22rem] space-y-1 overflow-auto">
               {selectedCards.map((card) => (
