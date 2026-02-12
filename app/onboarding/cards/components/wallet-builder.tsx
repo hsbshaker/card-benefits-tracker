@@ -425,30 +425,29 @@ export function WalletBuilder() {
               />
             </div>
 
-            {shouldShowResults ? (
-              <CardResultsList
-                className={cn(
-                  "mt-3",
-                  showLoading || error || results.length > 0
-                    ? "translate-y-0 opacity-100"
-                    : "pointer-events-none -translate-y-1 opacity-0",
-                )}
-                cards={results}
-                walletCardIds={walletCardIds}
-                onAdd={(card) => {
-                  addCard(card);
-                  resetSearchUI();
-                }}
-                onAddAnother={(card) => {
-                  addDuplicateInstance(card);
-                  resetSearchUI();
-                }}
-                isLoading={showLoading}
-                error={error}
-                highlightedIndex={highlightedIndex}
-              />
-            ) : null}
-          </div>
+          {shouldShowResults ? (
+            <CardResultsList
+              className={cn(
+                "mt-3",
+                showLoading || error || results.length > 0
+                  ? "translate-y-0 opacity-100"
+                  : "pointer-events-none -translate-y-1 opacity-0",
+              )}
+              cards={results}
+              walletCardIds={walletCardIds}
+              onAdd={(card) => {
+                addCard(card);
+                resetSearchUI();
+              }}
+              onAddAnother={(card) => {
+                addDuplicateInstance(card);
+                resetSearchUI();
+              }}
+              isLoading={showLoading}
+              error={error}
+              highlightedIndex={highlightedIndex}
+            />
+          ) : null}
 
           <Surface
             className={cn(
@@ -500,7 +499,7 @@ export function WalletBuilder() {
                   value={selectedIssuerCardId}
                   onChange={(event) => handleIssuerCardSelect(event.target.value)}
                   disabled={!activeIssuer || issuerCardLoading || issuerCardOptions.length === 0}
-                  className={cn(controlClasses, "appearance-none", rowTransition, !selectedIssuerCardId && "text-white/60")}
+                  className={cn(controlClasses, "appearance-none", rowTransition)}
                 >
                   <option value="">{activeIssuer ? "Select a card" : "Please select an issuer"}</option>
                   {issuerCardOptions.map((card) => (
