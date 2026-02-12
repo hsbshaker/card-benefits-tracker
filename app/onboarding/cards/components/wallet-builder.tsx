@@ -5,6 +5,7 @@ import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { createClient } from "@/utils/supabase/client";
 import { CardResult, CardResultsList } from "./card-results-list";
 
 type IssuerOption = {
@@ -39,6 +40,7 @@ const controlClasses =
   "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
 export function WalletBuilder() {
+  const supabase = createClient();
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CardResult[]>([]);
@@ -53,6 +55,7 @@ export function WalletBuilder() {
   const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
   const [pendingIssuerDuplicate, setPendingIssuerDuplicate] = useState<CardResult | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -365,6 +368,80 @@ export function WalletBuilder() {
     setSelectedIssuerCardId("");
   };
 
+  const handleContinue = async () => {
+    if (selectedCards.length === 0 || isSaving) return;
+
+    setIsSaving(true);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        if (userError) console.error("Failed to load authenticated user", userError);
+        pushToast("Could not verify your account. Please try again.");
+        return;
+      }
+
+      const uniqueCardIds = Array.from(new Set(selectedCards.map((card) => card.cardId)));
+      if (uniqueCardIds.length === 0) return;
+
+      const { data: existingRows, error: existingError } = await supabase
+        .from("user_cards")
+        .select("card_id")
+        .eq("user_id", user.id)
+        .in("card_id", uniqueCardIds);
+
+      if (existingError) {
+        console.error("Failed to check existing cards", existingError);
+        pushToast("Could not save cards right now. Please try again.");
+        return;
+      }
+
+      const existingCardIds = new Set((existingRows ?? []).map((row) => row.card_id));
+      const newCardIds = uniqueCardIds.filter((cardId) => !existingCardIds.has(cardId));
+
+      if (newCardIds.length > 0) {
+        const { error: insertError } = await supabase.from("user_cards").insert(
+          newCardIds.map((cardId) => ({
+            user_id: user.id,
+            card_id: cardId,
+          })),
+        );
+
+        if (insertError) {
+          console.error("Failed to save selected cards", insertError);
+          pushToast("Could not save cards right now. Please try again.");
+          return;
+        }
+      }
+
+      let bootstrapFailures = 0;
+      for (const cardId of newCardIds) {
+        const { error: bootstrapError } = await supabase.rpc("bootstrap_user_benefits_for_card", {
+          p_user_id: user.id,
+          p_card_id: cardId,
+        });
+
+        if (bootstrapError) {
+          bootstrapFailures += 1;
+          console.error(`Failed to bootstrap benefits for card ${cardId}`, bootstrapError);
+        }
+      }
+
+      if (bootstrapFailures > 0) {
+        pushToast("Saved cards, but some benefits may not have loaded yet.");
+        return;
+      }
+
+      pushToast(newCardIds.length > 0 ? "Cards saved successfully." : "Cards are already saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <AppShell containerClassName="py-8 sm:py-10">
       <div className="pointer-events-none fixed right-6 top-6 z-50 flex flex-col gap-2">
@@ -578,13 +655,14 @@ export function WalletBuilder() {
             <Button
               type="button"
               size="sm"
-              disabled={selectedCards.length === 0}
+              disabled={selectedCards.length === 0 || isSaving}
+              onClick={handleContinue}
               className={cn(
                 "h-9 rounded-lg px-3 text-sm",
-                selectedCards.length === 0 && "cursor-not-allowed opacity-50",
+                (selectedCards.length === 0 || isSaving) && "cursor-not-allowed opacity-50",
               )}
             >
-              Continue →
+              {isSaving ? "Saving..." : "Continue →"}
             </Button>
           </div>
 
