@@ -1,6 +1,7 @@
 "use client";
 
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -41,6 +42,7 @@ const controlClasses =
 
 export function WalletBuilder() {
   const supabase = createClient();
+  const router = useRouter();
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CardResult[]>([]);
@@ -437,6 +439,7 @@ export function WalletBuilder() {
       }
 
       pushToast(newCardIds.length > 0 ? "Cards saved successfully." : "Cards are already saved.");
+      router.push("/onboarding/benefits");
     } finally {
       setIsSaving(false);
     }
