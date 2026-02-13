@@ -629,7 +629,7 @@ export function WalletBuilder() {
   };
 
   return (
-    <AppShell className="min-h-0" containerClassName="py-8 sm:py-10">
+    <AppShell containerClassName="py-8 sm:py-10">
       <div className="mb-6">
         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 1 of 2 · Wallet Setup</p>
         <div className="mt-2 flex items-start gap-3">
@@ -654,12 +654,8 @@ export function WalletBuilder() {
       </div>
 
       <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-8 items-start">
-          <Surface
-            as="section"
-            style={{ height: 320 }}
-            className="relative z-30 self-start h-[320px] max-h-[320px] overflow-hidden p-4 sm:p-5"
-          >
+        <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Surface as="section" className="relative z-30 overflow-visible p-4 sm:p-5">
             <div ref={searchAreaRef}>
               <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
                 <span className="font-semibold">Search cards</span>
@@ -816,11 +812,7 @@ export function WalletBuilder() {
             </div>
           </Surface>
 
-          <Surface
-            as="aside"
-            style={{ height: 320 }}
-            className="self-start flex h-[320px] max-h-[320px] flex-col overflow-hidden p-4 sm:p-5"
-          >
+          <Surface as="aside" className="flex flex-col p-4 sm:p-5">
             <div className="mb-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-white/60">
@@ -832,7 +824,7 @@ export function WalletBuilder() {
 
             {pendingActionError ? <p className="mb-2 text-xs text-[#F4B4B4]">{pendingActionError}</p> : null}
 
-            <div className="mt-2 flex-1 overflow-y-auto pr-1">
+            <div className="mt-2 h-[9.75rem] overflow-y-auto pr-1">
               {pendingCards.length === 0 ? (
                 <div className="flex h-full items-center justify-center px-3 py-4">
                   <p className="text-center text-sm text-white/45">Your lineup is waiting.</p>
