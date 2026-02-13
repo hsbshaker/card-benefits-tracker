@@ -4,7 +4,6 @@ import { useCallback, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 export default function LoginPage() {
   const signInWithGoogle = useCallback(async () => {
