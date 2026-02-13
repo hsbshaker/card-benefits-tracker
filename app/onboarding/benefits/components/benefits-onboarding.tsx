@@ -322,23 +322,29 @@ const VirtualizedBenefitsList = memo(function VirtualizedBenefitsList({
 type CardPanelProps = {
   card: CardGroup;
   isExpanded: boolean;
+  isRemoved: boolean;
+  removedCardName: string | null;
   activeCadence: Cadence;
   onToggleExpand: (cardId: string) => void;
   onCadenceChange: (cardId: string, cadence: Cadence) => void;
   onTabKeyDown: (event: KeyboardEvent<HTMLButtonElement>, cardId: string, cadence: Cadence) => void;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
   onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
+  onRequestRemove: (card: CardGroup) => void;
 };
 
 const CardPanel = memo(function CardPanel({
   card,
   isExpanded,
+  isRemoved,
+  removedCardName,
   activeCadence,
   onToggleExpand,
   onCadenceChange,
   onTabKeyDown,
   onToggleRemindMe,
   onToggleUsed,
+  onRequestRemove,
 }: CardPanelProps) {
   const cadenceCountByType = useMemo(() => {
     const counts: Record<Cadence, number> = {
@@ -360,6 +366,14 @@ const CardPanel = memo(function CardPanel({
     () => card.benefits.filter((benefit) => benefit.cadence === activeCadence),
     [card.benefits, activeCadence],
   );
+
+  if (isRemoved) {
+    return (
+      <Surface className="p-4">
+        <p className="text-sm text-white/60">{`${removedCardName ?? card.cardName} Removed From Wallet`}</p>
+      </Surface>
+    );
+  }
 
   return (
     <Surface key={card.cardId} className="overflow-hidden p-0 backdrop-blur-0 [content-visibility:auto] [contain-intrinsic-size:80px]">
@@ -383,31 +397,43 @@ const CardPanel = memo(function CardPanel({
 
       {isExpanded ? (
         <div className="space-y-4 border-t border-white/10 px-5 py-4">
-          <div className="overflow-x-auto pb-1">
-            <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-full gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
-              {CADENCE_ORDER.map((cadence) => {
-                const count = cadenceCountByType[cadence];
-                const isActive = cadence === activeCadence;
-                return (
-                  <button
-                    key={cadence}
-                    id={`tab-${card.cardId}-${cadence}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-controls={`panel-${card.cardId}-${cadence}`}
-                    tabIndex={isActive ? 0 : -1}
-                    className={cn(
-                      "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                      isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
-                    )}
-                    onClick={() => onCadenceChange(card.cardId, cadence)}
-                    onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
-                  >
-                    {formatCadenceLabel(cadence)} ({count})
-                  </button>
-                );
-              })}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-1">
+            <div className="flex min-w-full items-center gap-2">
+              <div className="min-w-0 flex-1 overflow-x-auto">
+                <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex gap-1">
+                  {CADENCE_ORDER.map((cadence) => {
+                    const count = cadenceCountByType[cadence];
+                    const isActive = cadence === activeCadence;
+                    return (
+                      <button
+                        key={cadence}
+                        id={`tab-${card.cardId}-${cadence}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls={`panel-${card.cardId}-${cadence}`}
+                        tabIndex={isActive ? 0 : -1}
+                        className={cn(
+                          "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                          isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
+                        )}
+                        onClick={() => onCadenceChange(card.cardId, cadence)}
+                        onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
+                      >
+                        {formatCadenceLabel(cadence)} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="ml-auto shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
+                onClick={() => onRequestRemove(card)}
+              >
+                Remove From Wallet
+              </button>
             </div>
           </div>
 
@@ -454,9 +480,15 @@ export function BenefitsOnboarding() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cards, setCards] = useState<CardGroup[]>([]);
+  const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);
+  const [removedCardNamesById, setRemovedCardNamesById] = useState<Record<string, string>>({});
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [activeCadenceByCardId, setActiveCadenceByCardId] = useState<Record<string, Cadence>>({});
   const [userId, setUserId] = useState<string | null>(null);
+  const [removeTargetCard, setRemoveTargetCard] = useState<CardGroup | null>(null);
+  const [removeCardError, setRemoveCardError] = useState<string | null>(null);
+  const [isRemovingCard, setIsRemovingCard] = useState(false);
+  const removeNoticeTimersRef = useRef<Record<string, number>>({});
 
   const profileOnRender = useCallback<ProfilerOnRenderCallback>((id, phase, actualDuration) => {
     if (process.env.NODE_ENV === "production") return;
@@ -479,6 +511,8 @@ export function BenefitsOnboarding() {
     return () => {
       Object.values(toastTimersRef.current).forEach((timer) => window.clearTimeout(timer));
       toastTimersRef.current = {};
+      Object.values(removeNoticeTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      removeNoticeTimersRef.current = {};
     };
   }, []);
 
@@ -535,6 +569,8 @@ export function BenefitsOnboarding() {
 
     if (wallet.length === 0) {
       setCards([]);
+      setRemovedCardIds([]);
+      setRemovedCardNamesById({});
       setExpandedCardId(null);
       setLoading(false);
       return;
@@ -684,6 +720,16 @@ export function BenefitsOnboarding() {
       .sort((a, b) => a.cardName.localeCompare(b.cardName));
 
     setCards(nextCards);
+    setRemovedCardIds((prev) => prev.filter((cardId) => nextCards.some((card) => card.cardId === cardId)));
+    setRemovedCardNamesById((prev) => {
+      const next: Record<string, string> = {};
+      for (const cardId of Object.keys(prev)) {
+        if (nextCards.some((card) => card.cardId === cardId)) {
+          next[cardId] = prev[cardId];
+        }
+      }
+      return next;
+    });
     setExpandedCardId((prev) => prev ?? nextCards[0]?.cardId ?? null);
     setActiveCadenceByCardId((prev) => {
       const next: Record<string, Cadence> = {};
@@ -837,7 +883,79 @@ export function BenefitsOnboarding() {
     setActiveCadenceByCardId((prev) => ({ ...prev, [cardId]: cadence }));
   }, []);
 
-  const activeCard = useMemo(() => cards.find((card) => card.cardId === expandedCardId) ?? null, [cards, expandedCardId]);
+  const activeCard = useMemo(
+    () => cards.find((card) => card.cardId === expandedCardId && !removedCardIds.includes(card.cardId)) ?? null,
+    [cards, expandedCardId, removedCardIds],
+  );
+
+  const handleRequestRemove = useCallback((card: CardGroup) => {
+    if (isRemovingCard) return;
+    setRemoveTargetCard(card);
+    setRemoveCardError(null);
+  }, [isRemovingCard]);
+
+  const handleCancelRemove = useCallback(() => {
+    if (isRemovingCard) return;
+    setRemoveTargetCard(null);
+    setRemoveCardError(null);
+  }, [isRemovingCard]);
+
+  const handleConfirmRemove = useCallback(async () => {
+    if (!removeTargetCard || isRemovingCard) return;
+
+    setIsRemovingCard(true);
+    setRemoveCardError(null);
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      setRemoveCardError("Could not verify your account. Please try again.");
+      setIsRemovingCard(false);
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("user_cards")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("card_id", removeTargetCard.cardId);
+
+    if (deleteError) {
+      console.error("Failed to remove card from wallet", describeSupabaseError(deleteError));
+      setRemoveCardError("Could not remove this card right now. Please try again.");
+      setIsRemovingCard(false);
+      return;
+    }
+
+    const removedCardId = removeTargetCard.cardId;
+    setRemovedCardIds((prev) => (prev.includes(removedCardId) ? prev : [...prev, removedCardId]));
+    setRemovedCardNamesById((prev) => ({ ...prev, [removedCardId]: removeTargetCard.cardName }));
+    setExpandedCardId((prev) => (prev === removedCardId ? null : prev));
+    setActiveCadenceByCardId((prev) => {
+      if (!(removedCardId in prev)) return prev;
+      const next = { ...prev };
+      delete next[removedCardId];
+      return next;
+    });
+    setRemoveTargetCard(null);
+    setRemoveCardError(null);
+    setIsRemovingCard(false);
+
+    removeNoticeTimersRef.current[removedCardId] = window.setTimeout(() => {
+      setCards((prev) => prev.filter((card) => card.cardId !== removedCardId));
+      setRemovedCardIds((prev) => prev.filter((cardId) => cardId !== removedCardId));
+      setRemovedCardNamesById((prev) => {
+        if (!(removedCardId in prev)) return prev;
+        const next = { ...prev };
+        delete next[removedCardId];
+        return next;
+      });
+      delete removeNoticeTimersRef.current[removedCardId];
+    }, 1500);
+  }, [isRemovingCard, removeTargetCard, supabase]);
 
   /**
    * Perf findings from local profiling instrumentation on this page:
@@ -912,6 +1030,8 @@ export function BenefitsOnboarding() {
                     <CardPanel
                       key={card.cardId}
                       card={card}
+                      isRemoved={removedCardIds.includes(card.cardId)}
+                      removedCardName={removedCardNamesById[card.cardId] ?? null}
                       isExpanded={expandedCardId === card.cardId}
                       activeCadence={activeCadence}
                       onToggleExpand={handleToggleExpand}
@@ -919,6 +1039,7 @@ export function BenefitsOnboarding() {
                       onTabKeyDown={handleTabKeyDown}
                       onToggleRemindMe={updateRemindMe}
                       onToggleUsed={updateUsed}
+                      onRequestRemove={handleRequestRemove}
                     />
                   );
                 })}
@@ -936,6 +1057,35 @@ export function BenefitsOnboarding() {
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
         </div>
       </div>
+
+      {removeTargetCard ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4">
+          <Surface className="w-full max-w-md space-y-4 p-5">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-white">Remove card from wallet?</h2>
+              <p className="text-sm text-white/70">
+                This will remove this card and its benefits from your wallet. You can add it again later.
+              </p>
+            </div>
+
+            {removeCardError ? <p className="text-sm text-[#F4B4B4]">{removeCardError}</p> : null}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={handleCancelRemove} disabled={isRemovingCard}>
+                Cancel
+              </Button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-xl border border-[#E87979]/35 bg-[#B04646]/25 px-5 py-2.5 text-sm font-semibold text-[#F9D1D1] transition-colors hover:bg-[#B04646]/40 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/12 disabled:text-[#F9D1D1]/60"
+                onClick={() => void handleConfirmRemove()}
+                disabled={isRemovingCard}
+              >
+                {isRemovingCard ? "Removing..." : "Yes, remove"}
+              </button>
+            </div>
+          </Surface>
+        </div>
+      ) : null}
     </AppShell>
   );
 }
