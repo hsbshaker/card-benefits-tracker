@@ -69,8 +69,7 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 -mb-16 h-16">
-      <div className="absolute inset-0 bg-transparent supports-[backdrop-filter]:bg-white/[0.03] backdrop-blur-md" />
+    <header className="sticky top-0 z-50 -mb-16 h-16 bg-transparent backdrop-blur-md supports-[backdrop-filter]:bg-white/5">
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-6">
         <Link href="/" className="inline-flex items-center transition-colors hover:text-white">
           <span className="text-lg font-semibold tracking-tight text-white/92">Viero</span>
@@ -126,11 +125,7 @@ export function AppHeader() {
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-6 bg-gradient-to-b from-black/20 to-transparent"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-black/12 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-5 bg-gradient-to-b from-black/20 to-transparent"
       />
     </header>
   );
