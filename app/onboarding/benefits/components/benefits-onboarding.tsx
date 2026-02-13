@@ -197,16 +197,24 @@ function CheckmarkIcon({ className }: { className?: string }) {
 type BenefitItemProps = {
   benefit: BenefitRow;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
+  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
 };
 
-const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe }: BenefitItemProps) {
+const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onToggleUsed }: BenefitItemProps) {
   const formattedAmount = useMemo(() => formatBenefitAmount(benefit.value_cents, benefit.cadence), [benefit.value_cents, benefit.cadence]);
   const descriptionText = benefit.description?.trim();
   const enrollmentUrl = useMemo(() => getEnrollmentUrl(benefit.display_name), [benefit.display_name]);
   const isEnrollmentBenefit = Boolean(enrollmentUrl);
+  const remindMeDisabled = benefit.used;
+  const isRowDimmed = !benefit.remind_me || benefit.used;
 
   return (
-    <li className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 transition-all sm:px-3.5 sm:py-2">
+    <li
+      className={cn(
+        "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 transition-all sm:px-3.5 sm:py-2",
+        isRowDimmed ? "opacity-70 saturate-50" : "opacity-100 saturate-100",
+      )}
+    >
       <div className="flex min-h-10 flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium leading-5 text-white/95">
@@ -226,9 +234,11 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe }: Ben
             type="button"
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-              benefit.remind_me
-                ? "border-emerald-300/45 bg-emerald-400/20 text-emerald-100"
-                : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/85",
+              remindMeDisabled
+                ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                : benefit.remind_me
+                  ? "border-emerald-300/45 bg-emerald-400/20 text-emerald-100"
+                  : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/85",
             )}
             onClick={() => {
               if (isEnrollmentBenefit && enrollmentUrl) {
@@ -237,10 +247,27 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe }: Ben
               }
               onToggleRemindMe(benefit, !benefit.remind_me);
             }}
+            disabled={remindMeDisabled}
           >
             {isEnrollmentBenefit ? "Enroll Now" : "Remind Me"}
             {!isEnrollmentBenefit && benefit.remind_me ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
           </button>
+
+          {isEnrollmentBenefit ? (
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                benefit.used
+                  ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
+                  : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+              )}
+              onClick={() => onToggleUsed(benefit, !benefit.used)}
+            >
+              Already Enrolled
+              {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+            </button>
+          ) : null}
         </div>
       </div>
     </li>
@@ -250,9 +277,14 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe }: Ben
 type VirtualizedBenefitsListProps = {
   benefits: BenefitRow[];
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
+  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
 };
 
-const VirtualizedBenefitsList = memo(function VirtualizedBenefitsList({ benefits, onToggleRemindMe }: VirtualizedBenefitsListProps) {
+const VirtualizedBenefitsList = memo(function VirtualizedBenefitsList({
+  benefits,
+  onToggleRemindMe,
+  onToggleUsed,
+}: VirtualizedBenefitsListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const viewportHeight = Math.min(benefits.length, VIRTUAL_LIST_MAX_VISIBLE_ROWS) * BENEFIT_ROW_HEIGHT;
   const rowVirtualizer = useVirtualizer({
@@ -278,7 +310,7 @@ const VirtualizedBenefitsList = memo(function VirtualizedBenefitsList({ benefits
                 height: BENEFIT_ROW_HEIGHT,
               }}
             >
-              <BenefitItem benefit={benefit} onToggleRemindMe={onToggleRemindMe} />
+              <BenefitItem benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
             </li>
           );
         })}
@@ -295,6 +327,7 @@ type CardPanelProps = {
   onCadenceChange: (cardId: string, cadence: Cadence) => void;
   onTabKeyDown: (event: KeyboardEvent<HTMLButtonElement>, cardId: string, cadence: Cadence) => void;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
+  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
 };
 
 const CardPanel = memo(function CardPanel({
@@ -305,6 +338,7 @@ const CardPanel = memo(function CardPanel({
   onCadenceChange,
   onTabKeyDown,
   onToggleRemindMe,
+  onToggleUsed,
 }: CardPanelProps) {
   const cadenceCountByType = useMemo(() => {
     const counts: Record<Cadence, number> = {
@@ -389,11 +423,12 @@ const CardPanel = memo(function CardPanel({
                 key={`${card.cardId}-${activeCadence}`}
                 benefits={activeCadenceBenefits}
                 onToggleRemindMe={onToggleRemindMe}
+                onToggleUsed={onToggleUsed}
               />
             ) : (
               <ul className="space-y-1.5">
                 {activeCadenceBenefits.map((benefit) => (
-                  <BenefitItem key={benefit.id} benefit={benefit} onToggleRemindMe={onToggleRemindMe} />
+                  <BenefitItem key={benefit.id} benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
                 ))}
               </ul>
             )}
@@ -836,6 +871,44 @@ export function BenefitsOnboarding() {
     [supabase, updateBenefitLocal, userId],
   );
 
+  const updateUsed = useCallback(
+    async (benefit: BenefitRow, nextUsed: boolean) => {
+      if (!userId) return;
+      const nextRemindMe = nextUsed ? false : benefit.remind_me;
+
+      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: nextUsed, remind_me: nextRemindMe }));
+
+      const { data: savedRow, error: upsertError } = await supabase
+        .from("user_benefits")
+        .upsert(
+          {
+            user_id: userId,
+            benefit_id: benefit.id,
+            used: nextUsed,
+            remind_me: nextRemindMe,
+          },
+          { onConflict: "user_id,benefit_id" },
+        )
+        .select("id, benefit_id, remind_me, used")
+        .single();
+
+      if (upsertError) {
+        const errorDetails = describeSupabaseError(upsertError);
+        console.error("Failed to update used status", errorDetails);
+        updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: !nextUsed, remind_me: benefit.remind_me }));
+        return;
+      }
+
+      updateBenefitLocal(benefit.id, (prev) => ({
+        ...prev,
+        user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
+        used: savedRow?.used ?? nextUsed,
+        remind_me: savedRow?.remind_me ?? nextRemindMe,
+      }));
+    },
+    [supabase, updateBenefitLocal, userId],
+  );
+
   const handleTabKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, cardId: string, cadence: Cadence) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -931,6 +1004,7 @@ export function BenefitsOnboarding() {
                     onCadenceChange={handleCadenceChange}
                     onTabKeyDown={handleTabKeyDown}
                     onToggleRemindMe={updateRemindMe}
+                    onToggleUsed={updateUsed}
                   />
                 );
               })}
