@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
-type TabId = "wallet" | "dashboard" | "benefits";
+type TabId = "wallet" | "dashboard" | "reminders";
 
 type Tab = {
   id: TabId;
@@ -15,9 +15,9 @@ type Tab = {
 };
 
 const tabs: Tab[] = [
+  { id: "dashboard", label: "Dashboard (coming soon)", href: "/dashboard", comingSoon: true },
   { id: "wallet", label: "Wallet Builder", href: "/onboarding/build-your-lineup", comingSoon: false },
-  { id: "dashboard", label: "Dashboard", href: "/dashboard", comingSoon: true },
-  { id: "benefits", label: "Benefits Tracker", href: "/benefits", comingSoon: true },
+  { id: "reminders", label: "Personalize Reminders", href: "/onboarding/benefits", comingSoon: false },
 ];
 
 export function AppHeader() {
@@ -26,9 +26,9 @@ export function AppHeader() {
   const navRef = useRef<HTMLDivElement | null>(null);
 
   const activeTab = useMemo<TabId | null>(() => {
-    if (pathname.startsWith("/onboarding/build-your-lineup") || pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/dashboard")) return "dashboard";
-    if (pathname.startsWith("/benefits")) return "benefits";
+    if (pathname.startsWith("/onboarding/build-your-lineup") || pathname.startsWith("/wallet")) return "wallet";
+    if (pathname.startsWith("/onboarding/benefits") || pathname.startsWith("/benefits")) return "reminders";
     return null;
   }, [pathname]);
 
@@ -95,7 +95,11 @@ export function AppHeader() {
                     onKeyDown={(event) => handleComingSoonAction(tab, event)}
                     className={cn(
                       "relative inline-flex items-center py-1 text-sm transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45",
-                      isActive ? "text-white" : "text-white/60 hover:text-white",
+                      tab.comingSoon
+                        ? "cursor-not-allowed text-white/40 hover:text-white/40"
+                        : isActive
+                          ? "text-white"
+                          : "text-white/60 hover:text-white",
                     )}
                   >
                     {tab.label}
@@ -103,7 +107,7 @@ export function AppHeader() {
                       aria-hidden
                       className={cn(
                         "pointer-events-none absolute -bottom-1 left-0 h-0.5 rounded-full bg-[#F7C948] transition-all duration-200 ease-out",
-                        isActive ? "w-full opacity-100" : "w-3/4 opacity-0",
+                        isActive && !tab.comingSoon ? "w-full opacity-100" : "w-3/4 opacity-0",
                       )}
                     />
                   </Link>
