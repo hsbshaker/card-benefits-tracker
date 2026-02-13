@@ -70,12 +70,12 @@ export function AppHeader() {
 
   return (
     <header className="relative z-30 h-16 bg-transparent">
-      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-6">
+      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 bg-transparent px-6">
         <Link href="/" className="inline-flex items-center transition-colors hover:text-white">
           <span className="text-lg font-semibold tracking-tight text-white/92">Viero</span>
         </Link>
 
-        <nav aria-label="Primary navigation" ref={navRef}>
+        <nav aria-label="Primary navigation" ref={navRef} className="bg-transparent">
           <div className="flex items-center gap-8">
             {tabs.map((tab) => {
               const isActive = tab.id === activeTab;

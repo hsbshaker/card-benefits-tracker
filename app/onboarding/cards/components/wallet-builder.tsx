@@ -519,7 +519,7 @@ export function WalletBuilder() {
             </p>
           </div>
         </div>
-        <div className="mt-4 h-px bg-gradient-to-r from-transparent via-[#F7C948]/40 to-transparent" aria-hidden />
+        <div className="mt-4 h-px bg-[#F7C948]/30" aria-hidden />
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
