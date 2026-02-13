@@ -502,12 +502,24 @@ export function WalletBuilder() {
         ))}
       </div>
 
-      <div className="mb-8">
-        <p className="text-xs font-medium uppercase tracking-wide text-white/55">Step 1 of 2 — Add your cards</p>
-        <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Add cards</h1>
-        <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
-          Time to flex your lineup — let&apos;s see what cards you&apos;re working with
-        </p>
+      <div className="mb-6">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 1 of 2 · Wallet Setup</p>
+        <div className="mt-2 flex items-start gap-3">
+          <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
+          <div>
+            <h1
+              className="text-3xl font-semibold tracking-tight text-white transition md:text-4xl motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+            >
+              Build Your Lineup
+            </h1>
+            <p
+              className="mt-2 max-w-2xl text-sm leading-relaxed text-white/70 transition md:text-base motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+            >
+              Add your cards to unlock personalized benefit tracking.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 h-px bg-gradient-to-r from-transparent via-[#F7C948]/40 to-transparent" aria-hidden />
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">

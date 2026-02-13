@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { AppShell } from "@/components/ui/AppShell";
@@ -42,20 +41,11 @@ export default function LandingPage() {
 
   return (
     <AppShell>
-      <header className="flex items-center justify-between">
-        <Link href="/" className="group inline-flex items-center gap-2">
-          <Image src="/viero1.png" alt="Card Benefits Tracker" width={120} height={120} priority />
-          <span className="text-sm font-semibold tracking-wide text-white/90 transition-colors group-hover:text-white">
-            Card Benefits Tracker
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-3">
-          <Button onClick={signInWithGoogle} disabled={isSigningIn} size="sm" className="shadow-[0_10px_35px_-15px_rgba(127,182,255,0.7)]">
-            Continue with Google
-          </Button>
-        </div>
-      </header>
+      <div className="flex justify-end">
+        <Button onClick={signInWithGoogle} disabled={isSigningIn} size="sm" className="shadow-[0_10px_35px_-15px_rgba(127,182,255,0.7)]">
+          Continue with Google
+        </Button>
+      </div>
 
       <section className="pt-12 md:pt-14">
         <div className="max-w-3xl">
