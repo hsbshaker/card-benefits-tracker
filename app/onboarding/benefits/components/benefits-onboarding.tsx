@@ -35,6 +35,14 @@ type CardGroup = {
   benefits: BenefitRow[];
 };
 
+type UserBenefitRecord = {
+  id: string;
+  benefit_id: string;
+  remind_me?: boolean | null;
+  used?: boolean | null;
+  is_enabled?: boolean | null;
+};
+
 const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semi_annual", "annual", "one_time"];
 const BENEFIT_AMOUNT_ACCENT_CLASS = "text-[#F7C948]";
 const ISSUER_DISPLAY_MAP: Record<string, string> = {
@@ -359,7 +367,7 @@ export function BenefitsOnboarding() {
 
     let { data: userBenefitRows, error: userBenefitsError } = await supabase
       .from("user_benefits")
-      .select("id, benefit_id, remind_me, used")
+      .select("*")
       .eq("user_id", user.id)
       .in("benefit_id", benefitIds);
 
@@ -370,7 +378,7 @@ export function BenefitsOnboarding() {
       return;
     }
 
-    const userBenefitMap = new Map((userBenefitRows ?? []).map((row) => [row.benefit_id, row]));
+    const userBenefitMap = new Map(((userBenefitRows ?? []) as UserBenefitRecord[]).map((row) => [row.benefit_id, row]));
 
     const cardsMissingUserBenefits = new Set<string>();
     for (const card of dedupedWallet) {
@@ -393,7 +401,7 @@ export function BenefitsOnboarding() {
 
       const refetch = await supabase
         .from("user_benefits")
-        .select("id, benefit_id, remind_me, used")
+        .select("*")
         .eq("user_id", user.id)
         .in("benefit_id", benefitIds);
 
@@ -408,7 +416,7 @@ export function BenefitsOnboarding() {
       }
     }
 
-    const refreshedUserBenefitMap = new Map((userBenefitRows ?? []).map((row) => [row.benefit_id, row]));
+    const refreshedUserBenefitMap = new Map(((userBenefitRows ?? []) as UserBenefitRecord[]).map((row) => [row.benefit_id, row]));
 
     const nextCards: CardGroup[] = dedupedWallet
       .map((walletCard) => {
@@ -432,8 +440,13 @@ export function BenefitsOnboarding() {
               value_cents: cb.benefits.value_cents,
               notes: cb.benefits.notes,
               user_benefit_id: userBenefit?.id ?? null,
-              remind_me: userBenefit?.remind_me ?? true,
-              used: userBenefit?.used ?? false,
+              remind_me:
+                typeof userBenefit?.remind_me === "boolean"
+                  ? userBenefit.remind_me
+                  : typeof userBenefit?.is_enabled === "boolean"
+                    ? userBenefit.is_enabled
+                    : true,
+              used: typeof userBenefit?.used === "boolean" ? userBenefit.used : false,
             };
           });
 
