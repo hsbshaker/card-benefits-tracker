@@ -1,6 +1,10 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export const createClient = () => {
+let browserClient: SupabaseClient | null = null;
+
+export function getBrowserSupabaseClient() {
+  if (browserClient) return browserClient;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -8,9 +12,11 @@ export const createClient = () => {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+  browserClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       flowType: "pkce",
     },
   });
-};
+
+  return browserClient;
+}

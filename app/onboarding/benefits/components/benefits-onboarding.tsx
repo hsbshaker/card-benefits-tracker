@@ -17,7 +17,7 @@ import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
-import { createClient } from "@/utils/supabase/client";
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type Cadence = "monthly" | "quarterly" | "semi_annual" | "annual" | "one_time";
 
@@ -464,7 +464,7 @@ function getDefaultCadence(benefits: BenefitRow[]) {
 }
 
 export function BenefitsOnboarding() {
-  const supabase = createClient();
+  const supabase = useMemo(() => getBrowserSupabaseClient(), []);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);

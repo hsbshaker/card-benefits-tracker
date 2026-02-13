@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -21,7 +21,7 @@ const fadeUp = {
 
 
 export default function LandingPage() {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => getBrowserSupabaseClient(), []);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [user, setUser] = useState<User | null | undefined>(undefined);

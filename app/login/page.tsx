@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   const signInWithGoogle = useCallback(async () => {
-    const supabase = createClient();
+    const supabase = getBrowserSupabaseClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

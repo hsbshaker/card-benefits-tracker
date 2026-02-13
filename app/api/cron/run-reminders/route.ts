@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -96,17 +96,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("Missing Supabase env vars for reminder cron");
+  let supabase: ReturnType<typeof getServiceRoleSupabaseClient>;
+  try {
+    supabase = getServiceRoleSupabaseClient();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown service client configuration error";
+    console.error("Missing Supabase env vars for reminder cron", { error: errorMessage });
     return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
   }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 
   const runId = randomUUID();
   const startedAt = Date.now();
