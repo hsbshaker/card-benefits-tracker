@@ -1069,7 +1069,7 @@ export function BenefitsOnboarding() {
                 onClick={() => void handleConfirmRemove()}
                 disabled={isRemovingCard}
               >
-                {isRemovingCard ? "Removing..." : "Yes, remove"}
+                {isRemovingCard ? "Removing..." : "Yes, Remove"}
               </button>
             </div>
           </Surface>

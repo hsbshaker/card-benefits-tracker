@@ -818,22 +818,17 @@ export function WalletBuilder() {
                 <p className="text-xs font-medium uppercase tracking-wide text-white/60">
                   <span className="font-semibold">Pending</span> ({pendingCards.length})
                 </p>
-                <Button
+                <button
                   type="button"
-                  size="sm"
                   disabled={pendingCards.length === 0 || isSaving}
                   onClick={handleContinue}
-                  className={cn(
-                    "h-8 whitespace-nowrap rounded-lg px-3 text-xs",
-                    "disabled:bg-white/10 disabled:text-white/45 disabled:shadow-none",
-                  )}
+                  className="ml-auto shrink-0 rounded-lg border border-[#7FD9A8]/30 bg-[#2E7D57]/20 px-3 py-1.5 text-xs font-medium text-[#BFF3D6] transition-colors hover:border-[#8EE3B4]/45 hover:bg-[#2E7D57]/35 disabled:cursor-not-allowed disabled:border-white/12 disabled:bg-white/8 disabled:text-white/40"
                 >
                   {isSaving
                     ? "Adding..."
                     : `Add ${pendingCards.length} ${pendingCards.length === 1 ? "Card" : "Cards"} to Wallet`}
-                </Button>
+                </button>
               </div>
-              <p className="mt-1 text-xs text-white/55">Review before adding to your wallet.</p>
             </div>
 
             {pendingActionError ? <p className="mb-2 text-xs text-[#F4B4B4]">{pendingActionError}</p> : null}
@@ -887,7 +882,6 @@ export function WalletBuilder() {
               <p className="text-xs font-medium uppercase tracking-wide text-white/60">
                 <span className="font-semibold">Viero Wallet</span> ({savedCards.length})
               </p>
-              <p className="mt-1 text-xs text-white/55">Cards you’re actively tracking.</p>
             </div>
           </div>
 
@@ -949,7 +943,7 @@ export function WalletBuilder() {
                 onClick={() => void handleConfirmRemove()}
                 disabled={isRemovingCard}
               >
-                {isRemovingCard ? "Removing..." : "Yes, remove"}
+                {isRemovingCard ? "Removing..." : "Yes, Remove"}
               </button>
             </div>
           </Surface>
