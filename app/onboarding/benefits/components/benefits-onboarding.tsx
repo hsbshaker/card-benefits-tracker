@@ -1000,15 +1000,19 @@ export function BenefitsOnboarding() {
             className="mx-auto mt-4 h-px w-3/4 bg-gradient-to-r from-transparent via-[#F7C948]/60 to-transparent blur-[0.5px]"
             aria-hidden
           />
+          <button
+            type="button"
+            onClick={() => router.push("/onboarding/cards")}
+            className="mt-3 inline-flex items-center rounded-lg px-2 py-1 text-sm text-white/60 transition hover:text-white/85 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220]"
+          >
+            ← Back to Wallet Setup
+          </button>
         </div>
 
         <div className="space-y-4">
           {cards.length === 0 ? (
-            <Surface className="space-y-4 p-6">
+            <Surface className="p-6">
               <p className="text-sm text-white/75">No cards in your wallet yet. Add cards first to configure benefits.</p>
-              <Button variant="secondary" onClick={() => router.push("/onboarding/cards")}>
-                Back to wallet builder
-              </Button>
             </Surface>
           ) : (
             <Profiler id="benefits-card-list" onRender={profileOnRender}>
@@ -1036,12 +1040,9 @@ export function BenefitsOnboarding() {
             </Profiler>
           )}
 
-          <Surface className="sticky bottom-3 z-30 flex flex-wrap items-center justify-between gap-3 p-4 backdrop-blur-0">
-            <Button variant="secondary" onClick={() => router.push("/onboarding/cards")}>
-              ← Back
-            </Button>
-            <Button onClick={() => pushToast("All set. Your benefits setup is saved.")}>Finish Set-Up</Button>
-          </Surface>
+          <div className="sticky bottom-3 z-30 flex items-center justify-end">
+            <Button onClick={() => pushToast("All set. Your benefits setup is saved.")}>Go to My Dashboard</Button>
+          </div>
 
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
         </div>
