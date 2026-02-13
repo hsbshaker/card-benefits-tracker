@@ -3,9 +3,12 @@
 import { useCallback, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function LoginPage() {
-  const supabase = createClient();
   const signInWithGoogle = useCallback(async () => {
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -19,7 +22,7 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     void signInWithGoogle();
