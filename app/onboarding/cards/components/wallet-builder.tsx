@@ -70,6 +70,7 @@ export function WalletBuilder() {
   const [isRemovingCard, setIsRemovingCard] = useState(false);
   const [pendingActionError, setPendingActionError] = useState<string | null>(null);
   const [committingPendingIds, setCommittingPendingIds] = useState<Set<string>>(new Set());
+  const [showScrollCue, setShowScrollCue] = useState(false);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -78,6 +79,7 @@ export function WalletBuilder() {
   const searchInputWrapRef = useRef<HTMLDivElement | null>(null);
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const resultsOverlayRef = useRef<HTMLDivElement | null>(null);
+  const pendingListRef = useRef<HTMLDivElement | null>(null);
   const loadingDelayRef = useRef<number | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [resultsOverlayStyle, setResultsOverlayStyle] = useState<{
@@ -409,6 +411,30 @@ export function WalletBuilder() {
       window.removeEventListener("scroll", updateOverlayPosition, true);
     };
   }, [shouldShowResults, isClient, results.length, showLoading, error]);
+
+  const updatePendingScrollCue = useCallback(() => {
+    const element = pendingListRef.current;
+    if (!element) return;
+
+    const canScroll = element.scrollHeight > element.clientHeight + 1;
+    const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 8;
+    setShowScrollCue(canScroll && !atBottom);
+  }, []);
+
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(updatePendingScrollCue);
+    window.addEventListener("resize", updatePendingScrollCue);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updatePendingScrollCue);
+    };
+  }, [updatePendingScrollCue]);
+
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(updatePendingScrollCue);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [pendingCards.length, updatePendingScrollCue]);
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (!shouldShowResults || results.length === 0) return;
@@ -833,45 +859,64 @@ export function WalletBuilder() {
 
             {pendingActionError ? <p className="mb-2 text-xs text-[#F4B4B4]">{pendingActionError}</p> : null}
 
-            <div className="mt-2 h-[8.5rem] overflow-y-auto pr-1">
-              {pendingCards.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-3 py-4">
-                  <p className="text-center text-sm text-white/45">Your lineup is waiting.</p>
-                </div>
-              ) : (
-                <ul className="space-y-1">
-                  {pendingCards.map((card) => (
-                    <li
-                      key={card.instanceId}
-                      className={cn(
-                        "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
-                        "motion-safe:transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0 hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
-                        committingPendingIds.has(card.instanceId) && "pointer-events-none translate-y-1 opacity-0",
-                      )}
-                    >
-                      <div className="flex min-w-0 items-center gap-2 text-white/90">
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
-                        <span className="truncate">{card.display_name ?? card.card_name}</span>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
-                          }
-                          className={cn(
-                            "rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
-                            rowTransition,
-                          )}
-                          aria-label={`Remove ${card.display_name ?? card.card_name}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <div className="relative mt-2 h-[8.5rem]">
+              <div ref={pendingListRef} className="h-full overflow-y-auto pr-1" onScroll={updatePendingScrollCue}>
+                {pendingCards.length === 0 ? (
+                  <div className="flex h-full items-center justify-center px-3 py-4">
+                    <p className="text-center text-sm text-white/45">Your lineup is waiting.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-1">
+                    {pendingCards.map((card) => (
+                      <li
+                        key={card.instanceId}
+                        className={cn(
+                          "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
+                          "motion-safe:transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0 hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
+                          committingPendingIds.has(card.instanceId) && "pointer-events-none translate-y-1 opacity-0",
+                        )}
+                      >
+                        <div className="flex min-w-0 items-center gap-2 text-white/90">
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
+                          <span className="truncate">{card.display_name ?? card.card_name}</span>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
+                            }
+                            className={cn(
+                              "rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
+                              rowTransition,
+                            )}
+                            aria-label={`Remove ${card.display_name ?? card.card_name}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div
+                className={cn(
+                  "pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#232833] to-transparent transition-opacity duration-200",
+                  showScrollCue ? "opacity-100" : "opacity-0",
+                )}
+                aria-hidden
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  className="absolute bottom-2 left-1/2 h-4 w-4 -translate-x-1/2 text-white/35"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="m5.5 7.5 4.5 4.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
             </div>
           </Surface>
         </div>
