@@ -11,7 +11,7 @@ export function AppShell({ children, className, containerClassName }: AppShellPr
   return (
     <main
       className={cn(
-        "relative min-h-screen overflow-x-hidden bg-[#0B1220] text-white selection:bg-[#F7C948]/30 selection:text-white",
+        "relative min-h-screen overflow-x-hidden text-white selection:bg-[#F7C948]/30 selection:text-white",
         className,
       )}
     >

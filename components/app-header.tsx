@@ -69,62 +69,69 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40">
-      <div className="h-px bg-gradient-to-r from-[#0B1220] via-emerald-300/60 to-[#0B1220]" />
-      <div className="border-b border-white/10 bg-gradient-to-r from-[#0B1220] via-emerald-400/12 to-[#0B1220]">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-5">
-          <Link href="/" className="inline-flex items-center transition-colors hover:text-white">
-            <span className="text-[2rem] font-semibold tracking-tight text-white/92">Viero</span>
-          </Link>
+    <header className="sticky top-0 z-50 -mb-16 h-16">
+      <div className="absolute inset-0 bg-transparent supports-[backdrop-filter]:bg-white/[0.03] backdrop-blur-md" />
+      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-6">
+        <Link href="/" className="inline-flex items-center transition-colors hover:text-white">
+          <span className="text-lg font-semibold tracking-tight text-white/92">Viero</span>
+        </Link>
 
-          <nav aria-label="Primary navigation" ref={navRef}>
-            <div className="flex items-center gap-10">
-              {tabs.map((tab) => {
-                const isActive = tab.id === activeTab;
-                const showComingSoon = tab.id === comingSoonTab;
-                const tooltipId = `coming-soon-${tab.id}`;
+        <nav aria-label="Primary navigation" ref={navRef}>
+          <div className="flex items-center gap-8">
+            {tabs.map((tab) => {
+              const isActive = tab.id === activeTab;
+              const showComingSoon = tab.id === comingSoonTab;
+              const tooltipId = `coming-soon-${tab.id}`;
 
-                return (
-                  <div key={tab.id} className="relative">
-                    <Link
-                      href={tab.href}
-                      aria-describedby={showComingSoon ? tooltipId : undefined}
-                      onClick={(event) => {
-                        if (!tab.comingSoon) return;
-                        event.preventDefault();
-                        setComingSoonTab(tab.id);
-                      }}
-                      onKeyDown={(event) => handleComingSoonAction(tab, event)}
+              return (
+                <div key={tab.id} className="relative">
+                  <Link
+                    href={tab.href}
+                    aria-describedby={showComingSoon ? tooltipId : undefined}
+                    onClick={(event) => {
+                      if (!tab.comingSoon) return;
+                      event.preventDefault();
+                      setComingSoonTab(tab.id);
+                    }}
+                    onKeyDown={(event) => handleComingSoonAction(tab, event)}
+                    className={cn(
+                      "relative inline-flex items-center py-1 text-sm transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45",
+                      isActive ? "text-white" : "text-white/60 hover:text-white",
+                    )}
+                  >
+                    {tab.label}
+                    <span
+                      aria-hidden
                       className={cn(
-                        "relative inline-flex items-center py-1 text-lg transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45",
-                        isActive ? "font-medium text-white" : "text-white/62 hover:text-white",
+                        "pointer-events-none absolute -bottom-1 left-0 h-0.5 rounded-full bg-[#F7C948] transition-all duration-200 ease-out",
+                        isActive ? "w-full opacity-100" : "w-3/4 opacity-0",
                       )}
-                    >
-                      {tab.label}
-                      {isActive ? (
-                        <span
-                          aria-hidden
-                          className="pointer-events-none absolute inset-x-0 -bottom-1 h-px bg-[#F7C948]/95 motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
-                        />
-                      ) : null}
-                    </Link>
+                    />
+                  </Link>
 
-                    {showComingSoon ? (
-                      <div
-                        id={tooltipId}
-                        role="status"
-                        className="absolute left-1/2 top-[calc(100%+8px)] z-50 -translate-x-1/2 rounded-lg border border-white/15 bg-[#0F1A2E]/95 px-2.5 py-1.5 text-xs text-white/90 shadow-lg backdrop-blur"
-                      >
-                        Coming soon
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </nav>
-        </div>
+                  {showComingSoon ? (
+                    <div
+                      id={tooltipId}
+                      role="status"
+                      className="absolute left-1/2 top-[calc(100%+8px)] z-50 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/15 bg-[#0F1A2E]/90 px-2.5 py-1.5 text-xs text-white/85 shadow-md backdrop-blur-sm"
+                    >
+                      Coming soon
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </nav>
       </div>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-6 bg-gradient-to-b from-black/20 to-transparent"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-black/12 to-transparent"
+      />
     </header>
   );
 }
