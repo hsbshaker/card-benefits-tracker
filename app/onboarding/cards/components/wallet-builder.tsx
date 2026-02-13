@@ -24,12 +24,15 @@ type SelectedCardInstance = {
   display_name: string | null;
   issuer: string;
   network: string | null;
+  isPersisted: boolean;
 };
 
 type Toast = {
   id: string;
   message: string;
 };
+
+type WalletTab = "saved" | "pending";
 
 const ISSUER_OPTIONS: IssuerOption[] = [
   { id: "amex", name: "American Express", enabled: true, kind: "issuer" },
@@ -43,7 +46,7 @@ const controlClasses =
   "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
 export function WalletBuilder() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
@@ -59,6 +62,11 @@ export function WalletBuilder() {
   const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
+  const [removeTargetCard, setRemoveTargetCard] = useState<SelectedCardInstance | null>(null);
+  const [removeCardError, setRemoveCardError] = useState<string | null>(null);
+  const [isRemovingCard, setIsRemovingCard] = useState(false);
+  const [activeWalletTab, setActiveWalletTab] = useState<WalletTab>("pending");
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -74,8 +82,19 @@ export function WalletBuilder() {
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
+  const savedCardIds = useMemo(
+    () => new Set(selectedCards.filter((selected) => selected.isPersisted).map((selected) => selected.cardId)),
+    [selectedCards],
+  );
+  const pendingCardIds = useMemo(
+    () => new Set(selectedCards.filter((selected) => !selected.isPersisted).map((selected) => selected.cardId)),
+    [selectedCards],
+  );
   const issuerHasValue = activeIssuer !== "";
   const cardHasValue = Boolean(selectedIssuerCardId);
+  const savedCards = useMemo(() => selectedCards.filter((card) => card.isPersisted), [selectedCards]);
+  const pendingCards = useMemo(() => selectedCards.filter((card) => !card.isPersisted), [selectedCards]);
+  const visibleCards = activeWalletTab === "saved" ? savedCards : pendingCards;
 
   const removeToast = (id: string) => {
     const existingTimer = toastTimersRef.current[id];
@@ -119,6 +138,7 @@ export function WalletBuilder() {
         display_name: card.display_name,
         issuer: card.issuer,
         network: card.network,
+        isPersisted: false,
       },
     ]);
   };
@@ -148,6 +168,84 @@ export function WalletBuilder() {
   useEffect(() => {
     searchInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadExistingWalletCards = async () => {
+      setIsWalletLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!active) return;
+
+      if (userError || !user) {
+        if (userError) {
+          console.error("Failed to load authenticated user", userError);
+        }
+        setIsWalletLoading(false);
+        return;
+      }
+
+      type WalletCardRow = {
+        cards: {
+          id: string;
+          product_key: string | null;
+          card_name: string;
+          display_name: string | null;
+          issuer: string;
+          network: string | null;
+        } | null;
+      };
+
+      const { data, error: walletError } = await supabase
+        .from("user_cards")
+        .select("cards(id, product_key, card_name, display_name, issuer, network)")
+        .eq("user_id", user.id);
+
+      if (!active) return;
+
+      if (walletError) {
+        console.error("Failed to load wallet cards", walletError);
+        setIsWalletLoading(false);
+        return;
+      }
+
+      const walletRows = ((data ?? []) as WalletCardRow[])
+        .map((row) => row.cards)
+        .filter((card): card is NonNullable<WalletCardRow["cards"]> => Boolean(card));
+
+      setSelectedCards((prev) => {
+        const pendingCards = prev.filter((card) => !card.isPersisted);
+
+        const persistedCards: SelectedCardInstance[] = walletRows.map((card) => ({
+          instanceId: `persisted-${card.id}`,
+          cardId: card.id,
+          product_key: card.product_key,
+          card_name: card.card_name,
+          display_name: card.display_name,
+          issuer: card.issuer,
+          network: card.network,
+          isPersisted: true,
+        }));
+
+        const pendingWithoutPersistedDuplicates = pendingCards.filter((card) => !walletRows.some((wallet) => wallet.id === card.cardId));
+
+        return [...persistedCards, ...pendingWithoutPersistedDuplicates];
+      });
+
+      setIsWalletLoading(false);
+    };
+
+    loadExistingWalletCards();
+
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   useEffect(() => {
     const handleFocusShortcut = (event: globalThis.KeyboardEvent) => {
@@ -401,6 +499,58 @@ export function WalletBuilder() {
     [supabase],
   );
 
+  const handleRequestRemove = useCallback(
+    (card: SelectedCardInstance) => {
+      if (!card.isPersisted || isRemovingCard) return;
+      setRemoveTargetCard(card);
+      setRemoveCardError(null);
+    },
+    [isRemovingCard],
+  );
+
+  const handleCancelRemove = useCallback(() => {
+    if (isRemovingCard) return;
+    setRemoveTargetCard(null);
+    setRemoveCardError(null);
+  }, [isRemovingCard]);
+
+  const handleConfirmRemove = useCallback(async () => {
+    if (!removeTargetCard || !removeTargetCard.isPersisted || isRemovingCard) return;
+
+    setIsRemovingCard(true);
+    setRemoveCardError(null);
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      setRemoveCardError("Could not verify your account. Please try again.");
+      setIsRemovingCard(false);
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("user_cards")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("card_id", removeTargetCard.cardId);
+
+    if (deleteError) {
+      console.error("Failed to remove card from wallet", deleteError);
+      setRemoveCardError("Could not remove this card right now. Please try again.");
+      setIsRemovingCard(false);
+      return;
+    }
+
+    setSelectedCards((prev) => prev.filter((card) => card.cardId !== removeTargetCard.cardId));
+    setRemoveTargetCard(null);
+    setRemoveCardError(null);
+    setIsRemovingCard(false);
+    pushToast("Card removed from wallet.");
+  }, [isRemovingCard, removeTargetCard, supabase]);
+
   const handleContinue = async () => {
     if (selectedCards.length === 0 || isSaving) return;
 
@@ -558,7 +708,8 @@ export function WalletBuilder() {
                   : "pointer-events-none -translate-y-1 opacity-0",
               )}
               cards={results}
-              walletCardIds={walletCardIds}
+              savedCardIds={savedCardIds}
+              pendingCardIds={pendingCardIds}
               onAdd={(card) => {
                 addCard(card);
                 resetSearchUI({ focus: true });
@@ -642,11 +793,18 @@ export function WalletBuilder() {
                   <option value="" disabled>
                     Select a card
                   </option>
-                  {issuerCardOptions.map((card) => (
-                    <option key={card.id} value={card.id}>
-                      {card.display_name ?? card.card_name}
-                    </option>
-                  ))}
+                  {issuerCardOptions.map((card) => {
+                    const isSaved = savedCardIds.has(card.id);
+                    const isPending = pendingCardIds.has(card.id);
+                    const isUnavailable = isSaved || isPending;
+
+                    return (
+                      <option key={card.id} value={card.id} disabled={isUnavailable}>
+                        {card.display_name ?? card.card_name}
+                        {isSaved ? " (Saved)" : isPending ? " (Pending)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
 
                 {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
@@ -659,9 +817,32 @@ export function WalletBuilder() {
 
         <Surface as="aside" className="flex flex-col p-4 sm:p-5">
           <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 className="block text-xs font-medium uppercase tracking-wide text-white/60">
-              <span className="font-semibold">Viero Wallet</span> ({selectedCards.length})
-            </h2>
+            <div className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveWalletTab("pending")}
+                className={cn(
+                  "rounded-lg px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide",
+                  rowTransition,
+                  activeWalletTab === "pending" ? "bg-white/12 text-white" : "text-white/55 hover:text-white/80",
+                )}
+                aria-pressed={activeWalletTab === "pending"}
+              >
+                Add New Cards ({pendingCards.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveWalletTab("saved")}
+                className={cn(
+                  "rounded-lg px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide",
+                  rowTransition,
+                  activeWalletTab === "saved" ? "bg-white/12 text-white" : "text-white/55 hover:text-white/80",
+                )}
+                aria-pressed={activeWalletTab === "saved"}
+              >
+                Viero Wallet ({savedCards.length})
+              </button>
+            </div>
             <Button
               type="button"
               size="sm"
@@ -677,12 +858,18 @@ export function WalletBuilder() {
           </div>
 
 
-          {selectedCards.length === 0 ? (
-            <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">Your wallet’s looking a little light...</p>
+          {visibleCards.length === 0 ? (
+            <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">
+              {isWalletLoading && activeWalletTab === "saved"
+                ? "Loading your wallet..."
+                : activeWalletTab === "saved"
+                  ? "Your wallet’s feeling light. Let’s fix that."
+                  : "Your lineup is waiting."}
+            </p>
           ) : (
             <div className="mt-3 max-h-[22rem] flex-1 overflow-y-auto pr-1">
               <ul className="space-y-1">
-                {selectedCards.map((card) => (
+                {visibleCards.map((card) => (
                   <li
                     key={card.instanceId}
                     className={cn(
@@ -694,19 +881,43 @@ export function WalletBuilder() {
                       <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
                       <span className="truncate">{card.display_name ?? card.card_name}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
-                      }
-                      className={cn(
-                        "shrink-0 rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
-                        rowTransition,
-                      )}
-                      aria-label={`Remove ${card.display_name ?? card.card_name}`}
-                    >
-                      ×
-                    </button>
+                    {card.isPersisted ? (
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        <span className="rounded-md border border-[#5BBE7A]/35 bg-[#2E6B43]/20 px-2 py-0.5 text-[11px] uppercase tracking-wide text-[#B9F2C8]">
+                          Saved
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestRemove(card)}
+                          className={cn(
+                            "rounded-md px-1 text-sm leading-none text-[#F4B4B4]/90 hover:bg-[#B04646]/20 hover:text-[#F9D1D1]",
+                            rowTransition,
+                          )}
+                          aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        <span className="rounded-md border border-[#E7B84C]/35 bg-[#8C6920]/20 px-2 py-0.5 text-[11px] uppercase tracking-wide text-[#F7D98D]">
+                          Pending
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedCards((prev) => prev.filter((selectedCard) => selectedCard.instanceId !== card.instanceId))
+                          }
+                          className={cn(
+                            "rounded-lg px-1.5 py-0.5 text-white/55 opacity-20 hover:bg-white/10 hover:text-white group-hover:opacity-100",
+                            rowTransition,
+                          )}
+                          aria-label={`Remove ${card.display_name ?? card.card_name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -714,6 +925,35 @@ export function WalletBuilder() {
           )}
         </Surface>
       </div>
+
+      {removeTargetCard ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4">
+          <Surface className="w-full max-w-md space-y-4 p-5">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-white">Remove card from wallet?</h2>
+              <p className="text-sm text-white/70">
+                This will remove this card and its benefits from your wallet. You can add it again later.
+              </p>
+            </div>
+
+            {removeCardError ? <p className="text-sm text-[#F4B4B4]">{removeCardError}</p> : null}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={handleCancelRemove} disabled={isRemovingCard}>
+                Cancel
+              </Button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-xl border border-[#E87979]/35 bg-[#B04646]/25 px-5 py-2.5 text-sm font-semibold text-[#F9D1D1] transition-colors hover:bg-[#B04646]/40 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/12 disabled:text-[#F9D1D1]/60"
+                onClick={() => void handleConfirmRemove()}
+                disabled={isRemovingCard}
+              >
+                {isRemovingCard ? "Removing..." : "Yes, remove"}
+              </button>
+            </div>
+          </Surface>
+        </div>
+      ) : null}
 
     </AppShell>
   );

@@ -13,7 +13,8 @@ export type CardResult = {
 
 type CardResultsListProps = {
   cards: CardResult[];
-  walletCardIds: Set<string>;
+  savedCardIds: Set<string>;
+  pendingCardIds: Set<string>;
   onAdd: (card: CardResult) => void;
   emptyMessage?: string;
   isLoading?: boolean;
@@ -27,7 +28,8 @@ const rowTransition = "transition motion-safe:duration-200 ease-out";
 
 export function CardResultsList({
   cards,
-  walletCardIds,
+  savedCardIds,
+  pendingCardIds,
   onAdd,
   emptyMessage = "No cards found.",
   isLoading = false,
@@ -53,7 +55,9 @@ export function CardResultsList({
           <ul className={cn("max-h-96 overflow-auto py-1", listClassName)}>
             {cards.map((card, index) => {
               const highlighted = highlightedIndex === index;
-              const alreadyAdded = walletCardIds.has(card.id);
+              const isSaved = savedCardIds.has(card.id);
+              const isPending = pendingCardIds.has(card.id);
+              const isUnavailable = isSaved || isPending;
 
               return (
                 <li key={`${card.id}-${index}`}>
@@ -70,15 +74,19 @@ export function CardResultsList({
                       <p className="truncate">{card.display_name ?? card.card_name}</p>
                       <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
                     </div>
-                    {alreadyAdded ? (
+                    {isUnavailable ? (
                       <Button
                         size="sm"
                         variant="subtle"
                         disabled
                         className="cursor-not-allowed rounded-lg px-2 py-1 text-xs opacity-50"
-                        aria-label={`${card.display_name ?? card.card_name} is in wallet`}
+                        aria-label={
+                          isSaved
+                            ? `${card.display_name ?? card.card_name} is in wallet`
+                            : `${card.display_name ?? card.card_name} is pending add`
+                        }
                       >
-                        In wallet
+                        {isSaved ? "Saved" : "Pending"}
                       </Button>
                     ) : (
                       <Button size="sm" variant="subtle" onClick={() => onAdd(card)} className="rounded-lg px-2 py-1 text-xs">
