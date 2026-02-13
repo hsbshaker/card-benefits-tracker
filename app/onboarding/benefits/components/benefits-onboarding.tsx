@@ -975,51 +975,63 @@ export function BenefitsOnboarding() {
         ))}
       </div>
 
-      <div className="mx-auto max-w-5xl space-y-4">
-        <Surface className="p-5 sm:p-6">
-          <p className="text-xs font-medium uppercase tracking-wide text-white/55">Step 2 of 2 — Flex your benefits</p>
-          <h1 className="mt-2 text-2xl font-semibold text-white">Time to flex. Pick what you actually want to track.</h1>
-          <p className="mt-2 text-sm text-white/65">Turn reminders on for the perks you want to keep top of mind.</p>
-        </Surface>
-
-        {cards.length === 0 ? (
-          <Surface className="space-y-4 p-6">
-            <p className="text-sm text-white/75">No cards in your wallet yet. Add cards first to configure benefits.</p>
-            <Button variant="secondary" onClick={() => router.push("/onboarding/cards")}>
-              Back to wallet builder
-            </Button>
-          </Surface>
-        ) : (
-          <Profiler id="benefits-card-list" onRender={profileOnRender}>
-            <div className="space-y-3">
-              {cards.map((card) => {
-                const activeCadence = activeCadenceByCardId[card.cardId] ?? getDefaultCadence(card.benefits);
-                return (
-                  <CardPanel
-                    key={card.cardId}
-                    card={card}
-                    isExpanded={expandedCardId === card.cardId}
-                    activeCadence={activeCadence}
-                    onToggleExpand={handleToggleExpand}
-                    onCadenceChange={handleCadenceChange}
-                    onTabKeyDown={handleTabKeyDown}
-                    onToggleRemindMe={updateRemindMe}
-                    onToggleUsed={updateUsed}
-                  />
-                );
-              })}
+      <div className="w-full">
+        <div className="mb-6">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
+          <div className="mt-2 flex items-start gap-3">
+            <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white transition md:text-4xl motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0">
+                Fine-Tune Your Benefits
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/70 transition md:text-base motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0">
+                Turn on reminders for the benefits you want to keep top of mind.
+              </p>
             </div>
-          </Profiler>
-        )}
+          </div>
+          <div className="mt-4 h-px bg-gradient-to-r from-transparent via-[#F7C948]/40 to-transparent" aria-hidden />
+        </div>
 
-        <Surface className="sticky bottom-3 z-30 flex flex-wrap items-center justify-between gap-3 p-4 backdrop-blur-0">
-          <Button variant="secondary" onClick={() => router.push("/onboarding/cards")}>
-            ← Back
-          </Button>
-          <Button onClick={() => pushToast("All set. Your benefits setup is saved.")}>Finish Set-Up</Button>
-        </Surface>
+        <div className="space-y-4">
+          {cards.length === 0 ? (
+            <Surface className="space-y-4 p-6">
+              <p className="text-sm text-white/75">No cards in your wallet yet. Add cards first to configure benefits.</p>
+              <Button variant="secondary" onClick={() => router.push("/onboarding/cards")}>
+                Back to wallet builder
+              </Button>
+            </Surface>
+          ) : (
+            <Profiler id="benefits-card-list" onRender={profileOnRender}>
+              <div className="space-y-3">
+                {cards.map((card) => {
+                  const activeCadence = activeCadenceByCardId[card.cardId] ?? getDefaultCadence(card.benefits);
+                  return (
+                    <CardPanel
+                      key={card.cardId}
+                      card={card}
+                      isExpanded={expandedCardId === card.cardId}
+                      activeCadence={activeCadence}
+                      onToggleExpand={handleToggleExpand}
+                      onCadenceChange={handleCadenceChange}
+                      onTabKeyDown={handleTabKeyDown}
+                      onToggleRemindMe={updateRemindMe}
+                      onToggleUsed={updateUsed}
+                    />
+                  );
+                })}
+              </div>
+            </Profiler>
+          )}
 
-        {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
+          <Surface className="sticky bottom-3 z-30 flex flex-wrap items-center justify-between gap-3 p-4 backdrop-blur-0">
+            <Button variant="secondary" onClick={() => router.push("/onboarding/cards")}>
+              ← Back
+            </Button>
+            <Button onClick={() => pushToast("All set. Your benefits setup is saved.")}>Finish Set-Up</Button>
+          </Surface>
+
+          {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
+        </div>
       </div>
     </AppShell>
   );
