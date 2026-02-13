@@ -19,8 +19,6 @@ import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/utils/supabase/client";
 
-type Toast = { id: string; message: string };
-
 type Cadence = "monthly" | "quarterly" | "semi_annual" | "annual" | "one_time";
 
 type BenefitRow = {
@@ -469,9 +467,6 @@ export function BenefitsOnboarding() {
   const supabase = createClient();
   const router = useRouter();
 
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimersRef = useRef<Record<string, number>>({});
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cards, setCards] = useState<CardGroup[]>([]);
@@ -483,6 +478,8 @@ export function BenefitsOnboarding() {
   const [removeTargetCard, setRemoveTargetCard] = useState<CardGroup | null>(null);
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [isCompleting, setIsCompleting] = useState(false);
   const removeNoticeTimersRef = useRef<Record<string, number>>({});
 
   const profileOnRender = useCallback<ProfilerOnRenderCallback>((id, phase, actualDuration) => {
@@ -492,20 +489,8 @@ export function BenefitsOnboarding() {
     }
   }, []);
 
-  const pushToast = useCallback((message: string) => {
-    const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
-    setToasts((prev) => [...prev, { id, message }]);
-    const timeout = window.setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-      delete toastTimersRef.current[id];
-    }, 2600);
-    toastTimersRef.current[id] = timeout;
-  }, []);
-
   useEffect(() => {
     return () => {
-      Object.values(toastTimersRef.current).forEach((timer) => window.clearTimeout(timer));
-      toastTimersRef.current = {};
       Object.values(removeNoticeTimersRef.current).forEach((timer) => window.clearTimeout(timer));
       removeNoticeTimersRef.current = {};
     };
@@ -737,7 +722,6 @@ export function BenefitsOnboarding() {
   }, [supabase]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadWalletBenefits();
   }, [loadWalletBenefits]);
 
@@ -876,6 +860,11 @@ export function BenefitsOnboarding() {
     () => cards.find((card) => card.cardId === expandedCardId && !removedCardIds.includes(card.cardId)) ?? null,
     [cards, expandedCardId, removedCardIds],
   );
+  const activeCards = useMemo(
+    () => cards.filter((card) => !removedCardIds.includes(card.cardId)),
+    [cards, removedCardIds],
+  );
+  const hasActiveCards = activeCards.length > 0;
 
   const handleRequestRemove = useCallback((card: CardGroup) => {
     if (isRemovingCard) return;
@@ -946,6 +935,56 @@ export function BenefitsOnboarding() {
     }, 1500);
   }, [isRemovingCard, removeTargetCard, supabase]);
 
+  const handleComplete = useCallback(async () => {
+    if (isCompleting || !hasActiveCards) return;
+
+    setCompleteError(null);
+    setIsCompleting(true);
+
+    try {
+      let resolvedUserId = userId;
+      if (!resolvedUserId) {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+          setCompleteError("Could not verify your account. Please try again.");
+          return;
+        }
+
+        resolvedUserId = user.id;
+        setUserId(user.id);
+      }
+
+      const preferenceRows = activeCards.flatMap((card) =>
+        card.benefits.map((benefit) => ({
+          user_id: resolvedUserId,
+          benefit_id: benefit.id,
+          remind_me: benefit.remind_me,
+          used: benefit.used,
+        })),
+      );
+
+      if (preferenceRows.length > 0) {
+        const { error: saveError } = await supabase.from("user_benefits").upsert(preferenceRows, {
+          onConflict: "user_id,benefit_id",
+        });
+
+        if (saveError) {
+          console.error("Failed to persist benefit preferences on complete", describeSupabaseError(saveError));
+          setCompleteError("Could not save your preferences right now. Please try again.");
+          return;
+        }
+      }
+
+      router.push("/onboarding/success");
+    } finally {
+      setIsCompleting(false);
+    }
+  }, [activeCards, hasActiveCards, isCompleting, router, supabase, userId]);
+
   /**
    * Perf findings from local profiling instrumentation on this page:
    * 1) Toggle updates recreated every card + every benefit row object, triggering large list rerenders.
@@ -974,14 +1013,6 @@ export function BenefitsOnboarding() {
 
   return (
     <AppShell containerClassName="py-8 sm:py-10">
-      <div className="pointer-events-none fixed right-6 top-6 z-50 flex flex-col gap-2">
-        {toasts.map((toast) => (
-          <Surface key={toast.id} className="pointer-events-auto rounded-xl px-3 py-2">
-            <p className="text-sm text-white/90">{toast.message}</p>
-          </Surface>
-        ))}
-      </div>
-
       <div className="w-full">
         <div className="mb-6">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
@@ -1040,8 +1071,12 @@ export function BenefitsOnboarding() {
             </Profiler>
           )}
 
+          {completeError ? <p className="text-right text-xs text-[#F4B4B4]">{completeError}</p> : null}
+
           <div className="sticky bottom-3 z-30 flex items-center justify-end">
-            <Button disabled>Complete</Button>
+            <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting}>
+              {isCompleting ? "Saving..." : "Complete"}
+            </Button>
           </div>
 
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}

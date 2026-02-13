@@ -28,7 +28,13 @@ export function AppHeader() {
   const activeTab = useMemo<TabId | null>(() => {
     if (pathname.startsWith("/dashboard")) return "dashboard";
     if (pathname.startsWith("/onboarding/build-your-lineup") || pathname.startsWith("/wallet")) return "wallet";
-    if (pathname.startsWith("/onboarding/benefits") || pathname.startsWith("/benefits")) return "reminders";
+    if (
+      pathname.startsWith("/onboarding/benefits") ||
+      pathname.startsWith("/onboarding/success") ||
+      pathname.startsWith("/benefits")
+    ) {
+      return "reminders";
+    }
     return null;
   }, [pathname]);
 
