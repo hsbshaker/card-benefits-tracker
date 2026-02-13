@@ -9,7 +9,10 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding/build-your-lineup`,
+        redirectTo: `${window.location.origin}/onboarding/benefits`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 

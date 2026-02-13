@@ -59,7 +59,10 @@ export default function LandingPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding/build-your-lineup`,
+        redirectTo: `${window.location.origin}/onboarding/benefits`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 
@@ -132,34 +135,50 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="mt-7 flex flex-col gap-3"
+            className="mt-7 flex flex-col items-start gap-3"
           >
             {user === undefined ? (
-              <div aria-hidden className="h-[3.5rem] w-[14.5rem] opacity-0" />
+              <div aria-hidden className="h-[2.75rem] w-[13.5rem] opacity-0" />
             ) : user ? (
-              <Link href="/onboarding/benefits">
-                <Button size="lg" className="group">
-                  Enter Viero
-                  <span className="text-[#08111F]/70 transition group-hover:text-[#08111F]">→</span>
-                </Button>
-              </Link>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href="/onboarding/benefits">
+                  <Button size="md" className="group">
+                    Welcome back, {firstName}
+                  </Button>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  disabled={isSigningOut}
+                  className="w-fit text-sm text-white/70 underline-offset-4 transition hover:text-white/90 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220] disabled:cursor-not-allowed disabled:text-white/45"
+                >
+                  Not you? Sign-Out
+                </button>
+              </div>
             ) : (
-              <Button onClick={signInWithGoogle} disabled={isSigningIn} size="lg" className="group">
+              <Button onClick={signInWithGoogle} disabled={isSigningIn} size="md" className="group shadow-[0_10px_35px_-18px_rgba(127,182,255,0.7)]">
+                <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
+                  <path
+                    fill="#4285F4"
+                    d="M17.64 9.2045c0-.638-.0573-1.2518-.1636-1.8409H9v3.4818h4.8436c-.2086 1.125-.8427 2.0782-1.796 2.7164v2.2582h2.9087c1.7018-1.5664 2.6837-3.8746 2.6837-6.6155z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M9 18c2.43 0 4.4673-.8055 5.9563-2.1791l-2.9087-2.2582c-.8055.54-1.8368.8591-3.0476.8591-2.3441 0-4.3282-1.5832-5.0359-3.7091H.9573v2.3318C2.4382 15.9832 5.4818 18 9 18z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M3.9641 10.7127c-.18-.54-.2823-1.1168-.2823-1.7127s.1023-1.1727.2823-1.7127V4.9555H.9573C.3477 6.1705 0 7.5436 0 9s.3477 2.8295.9573 4.0445l3.0068-2.3318z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M9 3.5782c1.3214 0 2.5077.4541 3.4405 1.3459l2.5809-2.5809C13.4636.8918 11.4264 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9555l3.0068 2.3318C4.6718 5.1614 6.6559 3.5782 9 3.5782z"
+                  />
+                </svg>
                 Continue with Google
-                <span className="text-[#08111F]/70 transition group-hover:text-[#08111F]">→</span>
               </Button>
             )}
-
-            {user ? (
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                disabled={isSigningOut}
-                className="w-fit text-sm text-white/70 underline-offset-4 transition hover:text-white/90 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220] disabled:cursor-not-allowed disabled:text-white/45"
-              >
-                Not {firstName}? Sign-Out
-              </button>
-            ) : null}
           </motion.div>
         </div>
       </section>
