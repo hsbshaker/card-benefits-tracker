@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -21,12 +21,14 @@ const fadeUp = {
 
 
 export default function LandingPage() {
-  const supabase = useMemo(() => getBrowserSupabaseClient(), []);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
+    const supabase = getBrowserSupabaseClient();
+    if (!supabase) return;
+
     let isMounted = true;
 
     const loadUser = async () => {
@@ -51,9 +53,12 @@ export default function LandingPage() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []);
 
   async function signInWithGoogle() {
+    const supabase = getBrowserSupabaseClient();
+    if (!supabase) return;
+
     setIsSigningIn(true);
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -73,6 +78,9 @@ export default function LandingPage() {
   }
 
   async function signOut() {
+    const supabase = getBrowserSupabaseClient();
+    if (!supabase) return;
+
     if (isSigningOut) return;
     setIsSigningOut(true);
 
