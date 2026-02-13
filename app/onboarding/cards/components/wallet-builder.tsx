@@ -1,7 +1,7 @@
 "use client";
 
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -27,12 +27,16 @@ type SelectedCardInstance = {
   isPersisted: boolean;
 };
 
-type Toast = {
-  id: string;
-  message: string;
+type WalletCardRow = {
+  cards: {
+    id: string;
+    product_key: string | null;
+    card_name: string;
+    display_name: string | null;
+    issuer: string;
+    network: string | null;
+  } | null;
 };
-
-type WalletTab = "saved" | "pending";
 
 const ISSUER_OPTIONS: IssuerOption[] = [
   { id: "amex", name: "American Express", enabled: true, kind: "issuer" },
@@ -47,7 +51,6 @@ const controlClasses =
 
 export function WalletBuilder() {
   const supabase = useMemo(() => createClient(), []);
-  const router = useRouter();
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CardResult[]>([]);
@@ -60,21 +63,28 @@ export function WalletBuilder() {
   const [issuerCardLoading, setIssuerCardLoading] = useState(false);
   const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
   const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isWalletLoading, setIsWalletLoading] = useState(true);
   const [removeTargetCard, setRemoveTargetCard] = useState<SelectedCardInstance | null>(null);
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
-  const [activeWalletTab, setActiveWalletTab] = useState<WalletTab>("pending");
+  const [pendingActionError, setPendingActionError] = useState<string | null>(null);
+  const [committingPendingIds, setCommittingPendingIds] = useState<Set<string>>(new Set());
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
   const latestQueryRef = useRef<string>("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputWrapRef = useRef<HTMLDivElement | null>(null);
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
-  const toastTimersRef = useRef<Record<string, number>>({});
+  const resultsOverlayRef = useRef<HTMLDivElement | null>(null);
   const loadingDelayRef = useRef<number | null>(null);
+  const [isClient, setIsClient] = useState(false);
+  const [resultsOverlayStyle, setResultsOverlayStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   const normalizedQuery = query.trim();
   const isSearching = normalizedQuery.length > 0;
@@ -94,33 +104,6 @@ export function WalletBuilder() {
   const cardHasValue = Boolean(selectedIssuerCardId);
   const savedCards = useMemo(() => selectedCards.filter((card) => card.isPersisted), [selectedCards]);
   const pendingCards = useMemo(() => selectedCards.filter((card) => !card.isPersisted), [selectedCards]);
-  const visibleCards = activeWalletTab === "saved" ? savedCards : pendingCards;
-
-  const removeToast = (id: string) => {
-    const existingTimer = toastTimersRef.current[id];
-    if (existingTimer) {
-      window.clearTimeout(existingTimer);
-      delete toastTimersRef.current[id];
-    }
-
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
-
-  const pushToast = (message: string) => {
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    setToasts((prev) => [...prev, { id, message }]);
-
-    const timeout = window.setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-      delete toastTimersRef.current[id];
-    }, 2800);
-
-    toastTimersRef.current[id] = timeout;
-  };
 
   const addCardInstance = (card: CardResult) => {
     const instanceId =
@@ -145,8 +128,67 @@ export function WalletBuilder() {
 
   const addCard = (card: CardResult) => {
     if (walletCardIds.has(card.id)) return;
+    setPendingActionError(null);
     addCardInstance(card);
   };
+
+  const loadExistingWalletCards = useCallback(
+    async ({ keepPending = true }: { keepPending?: boolean } = {}) => {
+      setIsWalletLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        if (userError) {
+          console.error("Failed to load authenticated user", userError);
+        }
+        setIsWalletLoading(false);
+        return;
+      }
+
+      const { data, error: walletError } = await supabase
+        .from("user_cards")
+        .select("cards(id, product_key, card_name, display_name, issuer, network)")
+        .eq("user_id", user.id);
+
+      if (walletError) {
+        console.error("Failed to load wallet cards", walletError);
+        setIsWalletLoading(false);
+        return;
+      }
+
+      const walletRows = ((data ?? []) as WalletCardRow[])
+        .map((row) => row.cards)
+        .filter((card): card is NonNullable<WalletCardRow["cards"]> => Boolean(card));
+
+      setSelectedCards((prev) => {
+        const nextPendingCards = keepPending ? prev.filter((card) => !card.isPersisted) : [];
+
+        const persistedCards: SelectedCardInstance[] = walletRows.map((card) => ({
+          instanceId: `persisted-${card.id}`,
+          cardId: card.id,
+          product_key: card.product_key,
+          card_name: card.card_name,
+          display_name: card.display_name,
+          issuer: card.issuer,
+          network: card.network,
+          isPersisted: true,
+        }));
+
+        const pendingWithoutPersistedDuplicates = nextPendingCards.filter(
+          (card) => !walletRows.some((wallet) => wallet.id === card.cardId),
+        );
+
+        return [...persistedCards, ...pendingWithoutPersistedDuplicates];
+      });
+
+      setIsWalletLoading(false);
+    },
+    [supabase],
+  );
 
   const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
     setQuery("");
@@ -170,82 +212,12 @@ export function WalletBuilder() {
   }, []);
 
   useEffect(() => {
-    let active = true;
+    setIsClient(true);
+  }, []);
 
-    const loadExistingWalletCards = async () => {
-      setIsWalletLoading(true);
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (!active) return;
-
-      if (userError || !user) {
-        if (userError) {
-          console.error("Failed to load authenticated user", userError);
-        }
-        setIsWalletLoading(false);
-        return;
-      }
-
-      type WalletCardRow = {
-        cards: {
-          id: string;
-          product_key: string | null;
-          card_name: string;
-          display_name: string | null;
-          issuer: string;
-          network: string | null;
-        } | null;
-      };
-
-      const { data, error: walletError } = await supabase
-        .from("user_cards")
-        .select("cards(id, product_key, card_name, display_name, issuer, network)")
-        .eq("user_id", user.id);
-
-      if (!active) return;
-
-      if (walletError) {
-        console.error("Failed to load wallet cards", walletError);
-        setIsWalletLoading(false);
-        return;
-      }
-
-      const walletRows = ((data ?? []) as WalletCardRow[])
-        .map((row) => row.cards)
-        .filter((card): card is NonNullable<WalletCardRow["cards"]> => Boolean(card));
-
-      setSelectedCards((prev) => {
-        const pendingCards = prev.filter((card) => !card.isPersisted);
-
-        const persistedCards: SelectedCardInstance[] = walletRows.map((card) => ({
-          instanceId: `persisted-${card.id}`,
-          cardId: card.id,
-          product_key: card.product_key,
-          card_name: card.card_name,
-          display_name: card.display_name,
-          issuer: card.issuer,
-          network: card.network,
-          isPersisted: true,
-        }));
-
-        const pendingWithoutPersistedDuplicates = pendingCards.filter((card) => !walletRows.some((wallet) => wallet.id === card.cardId));
-
-        return [...persistedCards, ...pendingWithoutPersistedDuplicates];
-      });
-
-      setIsWalletLoading(false);
-    };
-
-    loadExistingWalletCards();
-
-    return () => {
-      active = false;
-    };
-  }, [supabase]);
+  useEffect(() => {
+    void loadExistingWalletCards();
+  }, [loadExistingWalletCards]);
 
   useEffect(() => {
     const handleFocusShortcut = (event: globalThis.KeyboardEvent) => {
@@ -393,6 +365,7 @@ export function WalletBuilder() {
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (searchAreaRef.current?.contains(target)) return;
+      if (resultsOverlayRef.current?.contains(target)) return;
       resetSearchUI({ focus: false });
     };
 
@@ -411,11 +384,31 @@ export function WalletBuilder() {
   }, [isSearching, shouldShowResults, resetSearchUI]);
 
   useEffect(() => {
-    return () => {
-      Object.values(toastTimersRef.current).forEach((timer) => window.clearTimeout(timer));
-      toastTimersRef.current = {};
+    if (!shouldShowResults || !isClient) {
+      setResultsOverlayStyle(null);
+      return;
+    }
+
+    const updateOverlayPosition = () => {
+      const anchor = searchInputWrapRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setResultsOverlayStyle({
+        top: rect.bottom + 12,
+        left: rect.left,
+        width: rect.width,
+      });
     };
-  }, []);
+
+    updateOverlayPosition();
+    window.addEventListener("resize", updateOverlayPosition);
+    window.addEventListener("scroll", updateOverlayPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateOverlayPosition);
+      window.removeEventListener("scroll", updateOverlayPosition, true);
+    };
+  }, [shouldShowResults, isClient, results.length, showLoading, error]);
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (!shouldShowResults || results.length === 0) return;
@@ -548,15 +541,19 @@ export function WalletBuilder() {
     setRemoveTargetCard(null);
     setRemoveCardError(null);
     setIsRemovingCard(false);
-    pushToast("Card removed from wallet.");
   }, [isRemovingCard, removeTargetCard, supabase]);
 
   const handleContinue = async () => {
-    if (selectedCards.length === 0 || isSaving) return;
+    if (pendingCards.length === 0 || isSaving) return;
 
+    const pendingInstanceIds = pendingCards.map((card) => card.instanceId);
+    setPendingActionError(null);
+    setCommittingPendingIds(new Set(pendingInstanceIds));
     setIsSaving(true);
 
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, 160));
+
       const {
         data: { user },
         error: userError,
@@ -564,13 +561,22 @@ export function WalletBuilder() {
 
       if (userError || !user) {
         if (userError) console.error("Failed to load authenticated user", userError);
-        pushToast("Could not verify your account. Please try again.");
+        setPendingActionError("Could not verify your account. Please try again.");
         return;
       }
 
-      const resolvedCards = await Promise.all(selectedCards.map((card) => resolveCanonicalCard(card)));
-      const uniqueCardIds = Array.from(new Set(resolvedCards.filter((card): card is { id: string; product_key: string | null } => Boolean(card?.id)).map((card) => card.id)));
-      if (uniqueCardIds.length === 0) return;
+      const resolvedCards = await Promise.all(pendingCards.map((card) => resolveCanonicalCard(card)));
+      const uniqueCardIds = Array.from(
+        new Set(
+          resolvedCards
+            .filter((card): card is { id: string; product_key: string | null } => Boolean(card?.id))
+            .map((card) => card.id),
+        ),
+      );
+      if (uniqueCardIds.length === 0) {
+        setSelectedCards((prev) => prev.filter((card) => card.isPersisted));
+        return;
+      }
 
       const { data: existingRows, error: existingError } = await supabase
         .from("user_cards")
@@ -580,7 +586,7 @@ export function WalletBuilder() {
 
       if (existingError) {
         console.error("Failed to check existing cards", existingError);
-        pushToast("Could not save cards right now. Please try again.");
+        setPendingActionError("Could not save cards right now. Please try again.");
         return;
       }
 
@@ -592,7 +598,7 @@ export function WalletBuilder() {
           const { error: insertError } = await addCardToWallet(user.id, cardId);
           if (insertError) {
             console.error("Failed to save selected cards", insertError);
-            pushToast("Could not save cards right now. Please try again.");
+            setPendingActionError("Could not save cards right now. Please try again.");
             return;
           }
         }
@@ -612,41 +618,18 @@ export function WalletBuilder() {
       }
 
       if (bootstrapFailures > 0) {
-        pushToast("Saved cards, but some benefits may not have loaded yet.");
-        return;
+        setPendingActionError("Cards were added, but some benefits may load shortly.");
       }
 
-      pushToast(newCardIds.length > 0 ? "Cards saved successfully." : "Cards are already saved.");
-      router.push("/onboarding/benefits");
+      await loadExistingWalletCards({ keepPending: false });
     } finally {
+      setCommittingPendingIds(new Set());
       setIsSaving(false);
     }
   };
 
   return (
     <AppShell containerClassName="py-8 sm:py-10">
-      <div className="pointer-events-none fixed right-6 top-6 z-50 flex flex-col gap-2">
-        {toasts.map((toast) => (
-          <Surface
-            key={toast.id}
-            className="pointer-events-auto flex items-start gap-3 rounded-xl px-3 py-2"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            <span className="text-sm text-white/90">{toast.message}</span>
-            <button
-              type="button"
-              onClick={() => removeToast(toast.id)}
-              className={cn("-mr-1 shrink-0 rounded-md px-1 text-white/70 hover:bg-white/10 hover:text-white", rowTransition)}
-              aria-label="Dismiss notification"
-            >
-              ×
-            </button>
-          </Surface>
-        ))}
-      </div>
-
       <div className="mb-6">
         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 1 of 2 · Wallet Setup</p>
         <div className="mt-2 flex items-start gap-3">
@@ -670,239 +653,196 @@ export function WalletBuilder() {
         />
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <Surface as="section" className="self-start p-4 sm:p-5">
-          <div ref={searchAreaRef}>
-            <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
-              <span className="font-semibold">Search cards</span>
-            </label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40" aria-hidden>
-                <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
-                  <circle cx="8.5" cy="8.5" r="5.5" />
-                  <path d="m12.5 12.5 4 4" strokeLinecap="round" />
-                </svg>
-              </span>
-              <input
-                ref={searchInputRef}
-                id="card-search"
-                type="text"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setHighlightedIndex(0);
-                }}
-                onKeyDown={handleResultsKeyDown}
-                placeholder="Search by credit card (e.g., Sapphire, Platinum)"
-                autoComplete="off"
-                className={cn(controlClasses, "pl-9 text-white/95", rowTransition)}
-              />
-            </div>
-
-          {shouldShowResults ? (
-            <CardResultsList
-              className={cn(
-                "mt-3",
-                showLoading || error || results.length > 0
-                  ? "translate-y-0 opacity-100"
-                  : "pointer-events-none -translate-y-1 opacity-0",
-              )}
-              cards={results}
-              savedCardIds={savedCardIds}
-              pendingCardIds={pendingCardIds}
-              onAdd={(card) => {
-                addCard(card);
-                resetSearchUI({ focus: true });
-              }}
-              isLoading={showLoading}
-              error={error}
-              highlightedIndex={highlightedIndex}
-            />
-          ) : null}
-
-          <div
-            className={cn(
-              "mt-5 transition-opacity transition-transform motion-safe:duration-200 ease-out",
-              isSearching
-                ? "pointer-events-none translate-y-1 scale-[0.99] opacity-60"
-                : "pointer-events-auto translate-y-0 scale-100 opacity-100",
-            )}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/60">
-                <span className="font-semibold">Browse by issuer</span>
-              </p>
-              {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
-            </div>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
-                  Issuer
-                </label>
-                <select
-                  id="issuer-select"
-                  value={activeIssuer}
-                  onChange={(event) => {
-                    const nextIssuer = event.target.value;
-                    setActiveIssuer(nextIssuer);
-                    if (nextIssuer === "") {
-                      setSelectedIssuerCardId("");
-                    }
-                  }}
-                  className={cn(
-                    controlClasses,
-                    "appearance-none",
-                    rowTransition,
-                    issuerHasValue ? "text-white/95" : "text-white/45",
-                  )}
-                >
-                  <option value="">
-                    Select an issuer
-                  </option>
-                  {enabledIssuers.map((issuer) => (
-                    <option key={issuer.id} value={issuer.id}>
-                      {issuer.name}
-                    </option>
-                  ))}
-                  {comingSoonIssuers.map((issuer) => (
-                    <option key={issuer.id} value={issuer.id} disabled>
-                      {issuer.name} (Coming soon)
-                    </option>
-                  ))}
-                </select>
+      <div className="space-y-6">
+        <div className="grid items-stretch gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Surface as="section" className="relative z-30 h-full overflow-visible p-4 sm:p-5">
+            <div ref={searchAreaRef}>
+              <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
+                <span className="font-semibold">Search cards</span>
+              </label>
+              <div className="relative z-20">
+                <div ref={searchInputWrapRef} className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40" aria-hidden>
+                    <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+                      <circle cx="8.5" cy="8.5" r="5.5" />
+                      <path d="m12.5 12.5 4 4" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <input
+                    ref={searchInputRef}
+                    id="card-search"
+                    type="text"
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setHighlightedIndex(0);
+                    }}
+                    onKeyDown={handleResultsKeyDown}
+                    placeholder="Search by credit card (e.g., Sapphire, Platinum)"
+                    autoComplete="off"
+                    className={cn(controlClasses, "pl-9 text-white/95", rowTransition)}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="issuer-card-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
-                  Card
-                </label>
-                <select
-                  id="issuer-card-select"
-                  value={selectedIssuerCardId}
-                  onChange={(event) => handleIssuerCardSelect(event.target.value)}
-                  disabled={!issuerHasValue}
-                  className={cn(
-                    controlClasses,
-                    "appearance-none",
-                    rowTransition,
-                    !issuerHasValue && "cursor-not-allowed border-white/10 bg-white/5 opacity-50",
-                    cardHasValue ? "text-white/95" : "text-white/45",
-                  )}
-                >
-                  <option value="" disabled>
-                    Select a card
-                  </option>
-                  {issuerCardOptions.map((card) => {
-                    const isSaved = savedCardIds.has(card.id);
-                    const isPending = pendingCardIds.has(card.id);
-                    const isUnavailable = isSaved || isPending;
+              {isClient && shouldShowResults && resultsOverlayStyle
+                ? createPortal(
+                    <div
+                      ref={resultsOverlayRef}
+                      className="pointer-events-auto fixed z-[100]"
+                      style={{
+                        top: resultsOverlayStyle.top,
+                        left: resultsOverlayStyle.left,
+                        width: resultsOverlayStyle.width,
+                      }}
+                    >
+                      <CardResultsList
+                        className={cn(
+                          "rounded-2xl border border-white/10 bg-slate-950/85 ring-1 ring-white/5 shadow-2xl shadow-[0_25px_60px_-20px_rgba(0,0,0,0.85)] backdrop-blur-md",
+                          showLoading || error || results.length > 0
+                            ? "translate-y-0 opacity-100"
+                            : "pointer-events-none -translate-y-1 opacity-0",
+                        )}
+                        cards={results}
+                        savedCardIds={savedCardIds}
+                        pendingCardIds={pendingCardIds}
+                        onAdd={(card) => {
+                          addCard(card);
+                          resetSearchUI({ focus: true });
+                        }}
+                        isLoading={showLoading}
+                        error={error}
+                        highlightedIndex={highlightedIndex}
+                      />
+                    </div>,
+                    document.body,
+                  )
+                : null}
 
-                    return (
-                      <option key={card.id} value={card.id} disabled={isUnavailable}>
-                        {card.display_name ?? card.card_name}
-                        {isSaved ? " (Saved)" : isPending ? " (Pending)" : ""}
+              <div
+                className={cn(
+                  "mt-5 transition-opacity transition-transform motion-safe:duration-200 ease-out",
+                  isSearching ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-white/60">
+                    <span className="font-semibold">Browse by issuer</span>
+                  </p>
+                  {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
+                      Issuer
+                    </label>
+                    <select
+                      id="issuer-select"
+                      value={activeIssuer}
+                      onChange={(event) => {
+                        const nextIssuer = event.target.value;
+                        setActiveIssuer(nextIssuer);
+                        if (nextIssuer === "") {
+                          setSelectedIssuerCardId("");
+                        }
+                      }}
+                      className={cn(
+                        controlClasses,
+                        "appearance-none",
+                        rowTransition,
+                        issuerHasValue ? "text-white/95" : "text-white/45",
+                      )}
+                    >
+                      <option value="">
+                        Select an issuer
                       </option>
-                    );
-                  })}
-                </select>
+                      {enabledIssuers.map((issuer) => (
+                        <option key={issuer.id} value={issuer.id}>
+                          {issuer.name}
+                        </option>
+                      ))}
+                      {comingSoonIssuers.map((issuer) => (
+                        <option key={issuer.id} value={issuer.id} disabled>
+                          {issuer.name} (Coming soon)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
-                {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
+                  <div>
+                    <label htmlFor="issuer-card-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
+                      Card
+                    </label>
+                    <select
+                      id="issuer-card-select"
+                      value={selectedIssuerCardId}
+                      onChange={(event) => handleIssuerCardSelect(event.target.value)}
+                      disabled={!issuerHasValue}
+                      className={cn(
+                        controlClasses,
+                        "appearance-none",
+                        rowTransition,
+                        !issuerHasValue && "cursor-not-allowed border-white/10 bg-white/5 opacity-50",
+                        cardHasValue ? "text-white/95" : "text-white/45",
+                      )}
+                    >
+                      <option value="" disabled>
+                        Select a card
+                      </option>
+                      {issuerCardOptions.map((card) => {
+                        const isSaved = savedCardIds.has(card.id);
+                        const isPending = pendingCardIds.has(card.id);
+                        const isUnavailable = isSaved || isPending;
+
+                        return (
+                          <option key={card.id} value={card.id} disabled={isUnavailable}>
+                            {card.display_name ?? card.card_name}
+                            {isSaved ? " (Saved)" : isPending ? " (Pending)" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
+                    {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          </div>
-        </Surface>
+          </Surface>
 
-        <Surface as="aside" className="flex flex-col p-4 sm:p-5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/5 p-1">
-              <button
-                type="button"
-                onClick={() => setActiveWalletTab("pending")}
-                className={cn(
-                  "rounded-lg px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide",
-                  rowTransition,
-                  activeWalletTab === "pending" ? "bg-white/12 text-white" : "text-white/55 hover:text-white/80",
-                )}
-                aria-pressed={activeWalletTab === "pending"}
-              >
-                Add New Cards ({pendingCards.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveWalletTab("saved")}
-                className={cn(
-                  "rounded-lg px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide",
-                  rowTransition,
-                  activeWalletTab === "saved" ? "bg-white/12 text-white" : "text-white/55 hover:text-white/80",
-                )}
-                aria-pressed={activeWalletTab === "saved"}
-              >
-                Viero Wallet ({savedCards.length})
-              </button>
+          <Surface as="aside" className="flex h-full flex-col p-4 sm:p-5">
+            <div className="mb-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-white/60">
+                  <span className="font-semibold">Pending</span> ({pendingCards.length})
+                </p>
+                <p className="mt-1 text-xs text-white/55">Review before adding to your wallet.</p>
+              </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              disabled={selectedCards.length === 0 || isSaving}
-              onClick={handleContinue}
-              className={cn(
-                "h-9 rounded-lg px-3 text-sm",
-                (selectedCards.length === 0 || isSaving) && "cursor-not-allowed opacity-50",
-              )}
-            >
-              {isSaving ? "Saving..." : "Continue →"}
-            </Button>
-          </div>
 
+            {pendingActionError ? <p className="mb-2 text-xs text-[#F4B4B4]">{pendingActionError}</p> : null}
 
-          {visibleCards.length === 0 ? (
-            <p className="mt-3 px-3 py-4 text-center text-sm text-white/45">
-              {isWalletLoading && activeWalletTab === "saved"
-                ? "Loading your wallet..."
-                : activeWalletTab === "saved"
-                  ? "Your wallet’s feeling light. Let’s fix that."
-                  : "Your lineup is waiting."}
-            </p>
-          ) : (
-            <div className="mt-3 max-h-[22rem] flex-1 overflow-y-auto pr-1">
-              <ul className="space-y-1">
-                {visibleCards.map((card) => (
-                  <li
-                    key={card.instanceId}
-                    className={cn(
-                      "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
-                      "motion-safe:transition motion-safe:duration-200 ease-out hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
-                    )}
-                  >
-                    <div className="flex min-w-0 items-center gap-2 text-white/90">
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
-                      <span className="truncate">{card.display_name ?? card.card_name}</span>
-                    </div>
-                    {card.isPersisted ? (
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        <span className="rounded-md border border-[#5BBE7A]/35 bg-[#2E6B43]/20 px-2 py-0.5 text-[11px] uppercase tracking-wide text-[#B9F2C8]">
-                          Saved
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRequestRemove(card)}
-                          className={cn(
-                            "rounded-md px-1 text-sm leading-none text-[#F4B4B4]/90 hover:bg-[#B04646]/20 hover:text-[#F9D1D1]",
-                            rowTransition,
-                          )}
-                          aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
-                        >
-                          ×
-                        </button>
+            {pendingCards.length === 0 ? (
+              <p className="mt-6 px-3 py-4 text-center text-sm text-white/45">Your lineup is waiting.</p>
+            ) : (
+              <div className="mt-2 max-h-[6.5rem] overflow-y-auto pr-1">
+                <ul className="space-y-1">
+                  {pendingCards.map((card) => (
+                    <li
+                      key={card.instanceId}
+                      className={cn(
+                        "group flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-sm",
+                        "motion-safe:transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0 hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10",
+                        committingPendingIds.has(card.instanceId) && "pointer-events-none translate-y-1 opacity-0",
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2 text-white/90">
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#7FB6FF]/90" aria-hidden />
+                        <span className="truncate">{card.display_name ?? card.card_name}</span>
                       </div>
-                    ) : (
                       <div className="shrink-0 flex items-center gap-1.5">
-                        <span className="rounded-md border border-[#E7B84C]/35 bg-[#8C6920]/20 px-2 py-0.5 text-[11px] uppercase tracking-wide text-[#F7D98D]">
-                          Pending
-                        </span>
                         <button
                           type="button"
                           onClick={() =>
@@ -917,7 +857,67 @@ export function WalletBuilder() {
                           ×
                         </button>
                       </div>
-                    )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Surface>
+        </div>
+
+        <Surface as="section" className="border-white/18 bg-white/10 p-5 sm:p-6">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-white/60">
+                <span className="font-semibold">Viero Wallet</span> ({savedCards.length})
+              </p>
+              <p className="mt-1 text-xs text-white/55">Cards you’re actively tracking.</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={pendingCards.length === 0 || isSaving}
+              onClick={handleContinue}
+              className={cn(
+                "h-9 rounded-lg px-3 text-sm",
+                (pendingCards.length === 0 || isSaving) && "cursor-not-allowed opacity-50",
+              )}
+            >
+              {isSaving ? "Saving..." : "Continue →"}
+            </Button>
+          </div>
+
+          {isWalletLoading && savedCards.length === 0 ? (
+            <p className="py-10 text-center text-sm text-white/50">Loading your wallet...</p>
+          ) : savedCards.length === 0 ? (
+            <p className="py-10 text-center text-sm text-white/45">Your lineup starts here.</p>
+          ) : (
+            <div className="max-h-[24rem] overflow-y-auto pr-1">
+              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {savedCards.map((card) => (
+                  <li
+                    key={card.instanceId}
+                    className="relative rounded-xl border border-white/14 bg-white/9 p-3 transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleRequestRemove(card)}
+                      className={cn(
+                        "absolute right-2 top-2 rounded-md p-1 text-white/40 hover:bg-white/10 hover:text-white/70",
+                        rowTransition,
+                      )}
+                      aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
+                    >
+                      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.8">
+                        <path d="m5 5 10 10M15 5 5 15" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                    <p className="pr-6 text-sm font-medium text-white/90">{card.display_name ?? card.card_name}</p>
+                    <p className="mt-1 text-xs text-white/55">
+                      {card.issuer}
+                      {" • "}
+                      {card.network ?? "N/A"}
+                    </p>
                   </li>
                 ))}
               </ul>

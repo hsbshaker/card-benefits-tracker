@@ -41,7 +41,7 @@ export function CardResultsList({
   return (
     <Surface
       className={cn(
-        "rounded-xl border-white/10 bg-white/5 p-1 transition-opacity transition-transform motion-safe:duration-200 motion-safe:ease-out",
+        "p-1 transition-opacity transition-transform motion-safe:duration-200 motion-safe:ease-out",
         className,
       )}
     >
