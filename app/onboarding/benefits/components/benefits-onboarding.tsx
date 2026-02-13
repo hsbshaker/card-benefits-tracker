@@ -206,7 +206,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
   const enrollmentUrl = useMemo(() => getEnrollmentUrl(benefit.display_name), [benefit.display_name]);
   const isEnrollmentBenefit = Boolean(enrollmentUrl);
   const remindMeDisabled = benefit.used;
-  const isRowDimmed = !benefit.remind_me || benefit.used;
+  const isRowDimmed = isEnrollmentBenefit ? benefit.used : !benefit.remind_me;
 
   return (
     <li
