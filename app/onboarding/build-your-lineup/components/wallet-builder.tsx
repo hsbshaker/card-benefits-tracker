@@ -28,15 +28,17 @@ type SelectedCardInstance = {
   isPersisted: boolean;
 };
 
+type WalletCard = {
+  id: string;
+  product_key: string | null;
+  card_name: string;
+  display_name: string | null;
+  issuer: string;
+  network: string | null;
+};
+
 type WalletCardRow = {
-  cards: {
-    id: string;
-    product_key: string | null;
-    card_name: string;
-    display_name: string | null;
-    issuer: string;
-    network: string | null;
-  } | null;
+  cards: WalletCard[] | null;
 };
 
 const ISSUER_OPTIONS: IssuerOption[] = [
@@ -166,14 +168,25 @@ export function WalletBuilder() {
         return;
       }
 
-      const walletRows = ((data ?? []) as WalletCardRow[])
-        .map((row) => row.cards)
-        .filter((card): card is NonNullable<WalletCardRow["cards"]> => Boolean(card));
+      const walletRows: WalletCardRow[] = data ?? [];
+
+      const walletCards: WalletCard[] = walletRows.flatMap((row) => {
+        const cards = row.cards;
+        if (!Array.isArray(cards)) return [];
+
+        return cards.filter(
+          (card): card is WalletCard =>
+            Boolean(card) &&
+            typeof card.id === "string" &&
+            typeof card.card_name === "string" &&
+            typeof card.issuer === "string",
+        );
+      });
 
       setSelectedCards((prev) => {
         const nextPendingCards = keepPending ? prev.filter((card) => !card.isPersisted) : [];
 
-        const persistedCards: SelectedCardInstance[] = walletRows.map((card) => ({
+        const persistedCards: SelectedCardInstance[] = walletCards.map((card) => ({
           instanceId: `persisted-${card.id}`,
           cardId: card.id,
           product_key: card.product_key,
@@ -185,7 +198,7 @@ export function WalletBuilder() {
         }));
 
         const pendingWithoutPersistedDuplicates = nextPendingCards.filter(
-          (card) => !walletRows.some((wallet) => wallet.id === card.cardId),
+          (card) => !walletCards.some((wallet) => wallet.id === card.cardId),
         );
 
         return [...persistedCards, ...pendingWithoutPersistedDuplicates];
