@@ -19,7 +19,6 @@ $$;
 create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),
   issuer text not null,
-  brand text,
   card_name text not null,
   network text not null,
   created_at timestamptz not null default now(),
@@ -41,7 +40,6 @@ create table if not exists public.user_cards (
 
 -- Indexes for dashboard lookups
 create index if not exists cards_issuer_idx on public.cards (issuer);
-create index if not exists cards_brand_idx on public.cards (brand);
 create index if not exists cards_network_idx on public.cards (network);
 create unique index if not exists cards_issuer_card_name_ci_unique
   on public.cards (lower(trim(issuer)), lower(trim(card_name)));

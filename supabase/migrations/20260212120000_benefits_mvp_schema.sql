@@ -8,33 +8,62 @@ alter table if exists public.cards
   add column if not exists display_name text,
   add column if not exists is_business boolean not null default false;
 
--- Cleanup: drop legacy triggers on public.cards that reference removed column "brand"
+-- Cleanup: drop legacy normalize triggers/functions that referenced removed column "brand"
 do $$
 declare
   r record;
+  fn_oid oid;
   fn_def text;
 begin
+  -- Find any function named normalize_cards_fields (any schema) and drop triggers that depend on it
+  select p.oid into fn_oid
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where p.proname = 'normalize_cards_fields'
+  limit 1;
+
+  if fn_oid is not null then
+    fn_def := pg_get_functiondef(fn_oid);
+
+    -- Only remove it if the function definition mentions "brand"
+    if fn_def ilike '%brand%' then
+      -- Drop ALL triggers (across any tables) that depend on this function
+      for r in
+        select t.tgname, c.oid::regclass as table_name
+        from pg_trigger t
+        join pg_class c on c.oid = t.tgrelid
+        where t.tgfoid = fn_oid
+          and not t.tgisinternal
+      loop
+        execute format('drop trigger if exists %I on %s;', r.tgname, r.table_name);
+      end loop;
+
+      -- Now drop the function itself (signature unknown; use oid-based drop)
+      execute format('drop function if exists %s;', fn_oid::regprocedure);
+    end if;
+  end if;
+
+  -- Also drop any other non-internal triggers on public.cards whose function mentions "brand"
   for r in
     select
       t.tgname,
       p.oid as func_oid,
-      n.nspname as func_schema,
-      p.proname as func_name,
-      pg_get_function_identity_arguments(p.oid) as func_args
+      c.oid::regclass as table_name
     from pg_trigger t
     join pg_proc p on p.oid = t.tgfoid
-    join pg_namespace n on n.oid = p.pronamespace
-    where t.tgrelid = 'public.cards'::regclass
+    join pg_class c on c.oid = t.tgrelid
+    where c.oid = 'public.cards'::regclass
       and not t.tgisinternal
   loop
     fn_def := pg_get_functiondef(r.func_oid);
 
     if fn_def ilike '%brand%' then
-      execute format('drop trigger if exists %I on public.cards;', r.tgname);
-      execute format('drop function if exists %I.%I(%s);', r.func_schema, r.func_name, r.func_args);
+      execute format('drop trigger if exists %I on %s;', r.tgname, r.table_name);
+      execute format('drop function if exists %s;', r.func_oid::regprocedure);
     end if;
   end loop;
 end $$;
+
 
 
 -- Backfill display_name from legacy card_name when present

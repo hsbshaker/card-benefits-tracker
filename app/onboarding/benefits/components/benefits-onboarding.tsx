@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -10,21 +10,20 @@ import { createClient } from "@/utils/supabase/client";
 
 type Toast = { id: string; message: string };
 
-type Frequency = "monthly" | "quarterly" | "semiannual" | "annual" | "activation" | "multi_year";
+type Cadence = "monthly" | "quarterly" | "semi_annual" | "annual" | "one_time";
+type LegacyFrequency = "monthly" | "quarterly" | "semiannual" | "annual" | "activation" | "multi_year";
 
 type BenefitRow = {
   id: string;
   display_name: string;
-  frequency: Frequency;
+  description: string | null;
+  cadence: Cadence;
+  cadence_detail: Record<string, unknown> | null;
   value_cents: number | null;
-  requires_enrollment: boolean;
-  requires_selection: boolean;
   notes: string | null;
   user_benefit_id: string | null;
-  is_enabled: boolean;
-  is_enrolled: boolean;
-  current_period_key: string;
-  is_used: boolean;
+  remind_me: boolean;
+  used: boolean;
 };
 
 type CardGroup = {
@@ -36,44 +35,90 @@ type CardGroup = {
   benefits: BenefitRow[];
 };
 
-const FREQUENCY_ORDER: Frequency[] = ["monthly", "quarterly", "semiannual", "annual", "activation", "multi_year"];
-const MARK_USED_FREQUENCIES = new Set<Frequency>(["monthly", "quarterly", "semiannual", "annual"]);
+const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semi_annual", "annual", "one_time"];
+const BENEFIT_AMOUNT_ACCENT_CLASS = "text-[#F7C948]";
+const ISSUER_DISPLAY_MAP: Record<string, string> = {
+  amex: "American Express",
+  "american express": "American Express",
+  chase: "Chase",
+  citi: "Citi",
+  "capital-one": "Capital One",
+  "capital one": "Capital One",
+  discover: "Discover",
+  wellsfargo: "Wells Fargo",
+  "wells fargo": "Wells Fargo",
+  usbank: "US Bank",
+  "us bank": "US Bank",
+  bankofamerica: "Bank of America",
+  "bank of america": "Bank of America",
+};
+const NETWORK_DISPLAY_MAP: Record<string, string> = {
+  amex: "Amex",
+  "american express": "Amex",
+  visa: "Visa",
+  mastercard: "Mastercard",
+  "master card": "Mastercard",
+  mc: "Mastercard",
+  discover: "Discover",
+};
 
-function formatFrequencyLabel(frequency: Frequency) {
-  if (frequency === "semiannual") return "Semiannual";
-  if (frequency === "multi_year") return "Multi-year";
-  return frequency.charAt(0).toUpperCase() + frequency.slice(1);
+function formatCadenceLabel(cadence: Cadence) {
+  if (cadence === "semi_annual") return "Semi-Annually";
+  if (cadence === "one_time") return "One-Time Activation";
+  return cadence.charAt(0).toUpperCase() + cadence.slice(1);
 }
 
-function formatMoney(valueCents: number | null) {
-  if (valueCents == null) return null;
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
-    valueCents / 100,
-  );
+function formatCurrencyFromCents(valueCents: number) {
+  const hasCents = Math.abs(valueCents) % 100 !== 0;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(valueCents / 100);
 }
 
-function getCurrentPeriodKey(frequency: Frequency, date = new Date()) {
-  const year = date.getFullYear();
-  const month = date.getMonth();
+function formatBenefitAmount(value_cents: number | null, cadence: Cadence) {
+  if (value_cents == null || value_cents <= 0) return null;
 
-  if (frequency === "monthly") {
-    const monthLabel = date.toLocaleString("en-US", { month: "short" });
-    return `${monthLabel}-${year}`;
+  const amount = formatCurrencyFromCents(value_cents);
+
+  if (cadence === "one_time") return `${amount} one-time`;
+  if (cadence === "monthly") return `${amount}/month`;
+  if (cadence === "quarterly") return `${amount}/quarter`;
+  if (cadence === "semi_annual") return `${amount}/semi-annual`;
+  return `${amount}/year`;
+}
+
+function normalizeCadence(cadence: string | null | undefined, frequency: LegacyFrequency | null | undefined): Cadence {
+  if (cadence === "monthly" || cadence === "quarterly" || cadence === "semi_annual" || cadence === "annual" || cadence === "one_time") {
+    return cadence;
   }
 
-  if (frequency === "quarterly") {
-    return `Q${Math.floor(month / 3) + 1}-${year}`;
-  }
+  if (frequency === "monthly" || frequency === "quarterly" || frequency === "annual") return frequency;
+  if (frequency === "semiannual") return "semi_annual";
+  if (frequency === "activation") return "one_time";
+  if (frequency === "multi_year") return "annual";
+  return "annual";
+}
 
-  if (frequency === "semiannual") {
-    return `${month < 6 ? "H1" : "H2"}-${year}`;
-  }
+function toTitleCase(raw: string) {
+  return raw
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
-  if (frequency === "annual" || frequency === "multi_year") {
-    return `${year}`;
-  }
+function normalizeIssuerDisplayName(rawIssuer: string) {
+  const normalizedKey = rawIssuer.trim().toLowerCase();
+  return ISSUER_DISPLAY_MAP[normalizedKey] ?? toTitleCase(rawIssuer);
+}
 
-  return "Lifetime";
+function normalizeNetworkDisplayName(rawNetwork: string | null) {
+  if (!rawNetwork) return null;
+  const normalizedKey = rawNetwork.trim().toLowerCase();
+  return NETWORK_DISPLAY_MAP[normalizedKey] ?? toTitleCase(rawNetwork);
 }
 
 export function BenefitsOnboarding() {
@@ -87,6 +132,7 @@ export function BenefitsOnboarding() {
   const [error, setError] = useState<string | null>(null);
   const [cards, setCards] = useState<CardGroup[]>([]);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [activeCadenceByCardId, setActiveCadenceByCardId] = useState<Record<string, Cadence>>({});
   const [userId, setUserId] = useState<string | null>(null);
   const hasLoggedRepairWarningRef = useRef(false);
 
@@ -267,7 +313,7 @@ export function BenefitsOnboarding() {
     const { data: cardBenefitRows, error: cardBenefitsError } = await supabase
       .from("card_benefits")
       .select(
-        "card_id, benefit_id, benefits!inner(id, display_name, frequency, value_cents, requires_enrollment, requires_selection, notes)",
+        "card_id, benefit_id, benefits!inner(id, display_name, description, cadence, cadence_detail, frequency, value_cents, requires_enrollment, requires_selection, notes)",
       )
       .in("card_id", cardIds);
 
@@ -284,14 +330,14 @@ export function BenefitsOnboarding() {
       benefits: {
         id: string;
         display_name: string;
-        frequency: Frequency;
+        description: string | null;
+        cadence: string | null;
+        cadence_detail: Record<string, unknown> | null;
+        frequency: LegacyFrequency | null;
         value_cents: number | null;
-        requires_enrollment: boolean;
-        requires_selection: boolean;
         notes: string | null;
       };
     }>;
-
 
     if (process.env.NODE_ENV !== "production") {
       const benefitCountByCard = new Map<string, number>();
@@ -313,7 +359,7 @@ export function BenefitsOnboarding() {
 
     let { data: userBenefitRows, error: userBenefitsError } = await supabase
       .from("user_benefits")
-      .select("id, benefit_id, is_enabled, is_enrolled")
+      .select("id, benefit_id, remind_me, used")
       .eq("user_id", user.id)
       .in("benefit_id", benefitIds);
 
@@ -347,7 +393,7 @@ export function BenefitsOnboarding() {
 
       const refetch = await supabase
         .from("user_benefits")
-        .select("id, benefit_id, is_enabled, is_enrolled")
+        .select("id, benefit_id, remind_me, used")
         .eq("user_id", user.id)
         .in("benefit_id", benefitIds);
 
@@ -364,55 +410,30 @@ export function BenefitsOnboarding() {
 
     const refreshedUserBenefitMap = new Map((userBenefitRows ?? []).map((row) => [row.benefit_id, row]));
 
-    const periodKeys = Array.from(
-      new Set(cardBenefits.map((row) => getCurrentPeriodKey(row.benefits.frequency as Frequency))),
-    );
-
-    const { data: periodRows, error: periodError } = await supabase
-      .from("user_benefit_period_status")
-      .select("benefit_id, period_key, is_used")
-      .eq("user_id", user.id)
-      .in("benefit_id", benefitIds)
-      .in("period_key", periodKeys);
-
-    if (periodError) {
-      console.error("Failed to load period status", periodError);
-      setError("Could not load period status right now.");
-      setLoading(false);
-      return;
-    }
-
-    const periodStatusMap = new Map((periodRows ?? []).map((row) => [`${row.benefit_id}:${row.period_key}`, row]));
-
     const nextCards: CardGroup[] = dedupedWallet
       .map((walletCard) => {
         const benefitsForCard = cardBenefits
           .filter((cb) => cb.card_id === walletCard.card_id)
           .sort(
             (a, b) =>
-              FREQUENCY_ORDER.indexOf(a.benefits.frequency) - FREQUENCY_ORDER.indexOf(b.benefits.frequency) ||
+              CADENCE_ORDER.indexOf(normalizeCadence(a.benefits.cadence, a.benefits.frequency)) -
+                CADENCE_ORDER.indexOf(normalizeCadence(b.benefits.cadence, b.benefits.frequency)) ||
               a.benefits.display_name.localeCompare(b.benefits.display_name),
           )
           .map((cb) => {
             const userBenefit = refreshedUserBenefitMap.get(cb.benefit_id);
-            const currentPeriodKey = getCurrentPeriodKey(cb.benefits.frequency);
-            const periodStatus = periodStatusMap.get(`${cb.benefit_id}:${currentPeriodKey}`);
 
             return {
               id: cb.benefit_id,
               display_name: cb.benefits.display_name,
-              frequency: cb.benefits.frequency,
+              description: cb.benefits.description,
+              cadence: normalizeCadence(cb.benefits.cadence, cb.benefits.frequency),
+              cadence_detail: cb.benefits.cadence_detail,
               value_cents: cb.benefits.value_cents,
-              requires_enrollment: cb.benefits.requires_enrollment,
-              requires_selection: cb.benefits.requires_selection,
               notes: cb.benefits.notes,
               user_benefit_id: userBenefit?.id ?? null,
-              is_enabled: userBenefit?.is_enabled ?? false,
-              // We use is_enrolled as a generic boolean confirmation flag for both
-              // "enrolled" and "selected" confirmation states.
-              is_enrolled: userBenefit?.is_enrolled ?? false,
-              current_period_key: currentPeriodKey,
-              is_used: periodStatus?.is_used ?? false,
+              remind_me: userBenefit?.remind_me ?? true,
+              used: userBenefit?.used ?? false,
             };
           });
 
@@ -420,8 +441,8 @@ export function BenefitsOnboarding() {
           cardId: walletCard.card_id,
           cardName: walletCard.cards.display_name ?? walletCard.cards.card_name,
           productKey: walletCard.cards.product_key,
-          issuer: walletCard.cards.issuer,
-          network: walletCard.cards.network,
+          issuer: normalizeIssuerDisplayName(walletCard.cards.issuer),
+          network: normalizeNetworkDisplayName(walletCard.cards.network),
           benefits: benefitsForCard,
         };
       })
@@ -429,6 +450,21 @@ export function BenefitsOnboarding() {
 
     setCards(nextCards);
     setExpandedCardId((prev) => prev ?? nextCards[0]?.cardId ?? null);
+    setActiveCadenceByCardId((prev) => {
+      const next: Record<string, Cadence> = {};
+      for (const card of nextCards) {
+        const existing = prev[card.cardId];
+        if (existing && card.benefits.some((benefit) => benefit.cadence === existing)) {
+          next[card.cardId] = existing;
+          continue;
+        }
+
+        next[card.cardId] = card.benefits.some((benefit) => benefit.cadence === "monthly")
+          ? "monthly"
+          : (CADENCE_ORDER.find((cadence) => card.benefits.some((benefit) => benefit.cadence === cadence)) ?? "monthly");
+      }
+      return next;
+    });
     setLoading(false);
   };
 
@@ -446,10 +482,11 @@ export function BenefitsOnboarding() {
     );
   };
 
-  const updateTrack = async (benefit: BenefitRow, nextValue: boolean) => {
+  const updateRemindMe = async (benefit: BenefitRow, nextValue: boolean) => {
     if (!userId) return;
+    if (benefit.used && nextValue) return;
 
-    updateBenefitLocal(benefit.id, (prev) => ({ ...prev, is_enabled: nextValue }));
+    updateBenefitLocal(benefit.id, (prev) => ({ ...prev, remind_me: nextValue }));
 
     const { error: updateError } = await supabase
       .from("user_benefits")
@@ -457,109 +494,73 @@ export function BenefitsOnboarding() {
         {
           user_id: userId,
           benefit_id: benefit.id,
-          is_enabled: nextValue,
+          remind_me: nextValue,
+          used: benefit.used,
         },
         { onConflict: "user_id,benefit_id" },
       );
 
     if (updateError) {
-      console.error("Failed to update track status", updateError);
-      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, is_enabled: !nextValue }));
-      pushToast("Could not save track setting. Please try again.");
+      console.error("Failed to update remind me status", updateError);
+      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, remind_me: !nextValue }));
+      pushToast("Could not save reminder setting. Please try again.");
       return;
     }
 
-    pushToast(nextValue ? "Benefit tracking enabled." : "Benefit tracking disabled.");
+    pushToast(nextValue ? "Reminder enabled." : "Reminder disabled.");
   };
 
-  const updateEnrollment = async (benefit: BenefitRow, nextValue: boolean) => {
+  const updateUsed = async (benefit: BenefitRow, nextUsed: boolean) => {
     if (!userId) return;
+    const nextRemindMe = nextUsed ? false : benefit.remind_me;
 
-    updateBenefitLocal(benefit.id, (prev) => ({ ...prev, is_enrolled: nextValue }));
+    updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: nextUsed, remind_me: nextRemindMe }));
 
-    const { error: updateError } = await supabase
-      .from("user_benefits")
-      .upsert(
-        {
-          user_id: userId,
-          benefit_id: benefit.id,
-          is_enrolled: nextValue,
-        },
-        { onConflict: "user_id,benefit_id" },
-      );
-
-    if (updateError) {
-      console.error("Failed to update confirmation status", updateError);
-      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, is_enrolled: !nextValue }));
-      pushToast("Could not save confirmation setting. Please try again.");
-      return;
-    }
-
-    pushToast(nextValue ? "Confirmation saved." : "Confirmation removed.");
-  };
-
-  const toggleUsed = async (benefit: BenefitRow, nextUsed: boolean) => {
-    if (!userId) return;
-
-    updateBenefitLocal(benefit.id, (prev) => ({ ...prev, is_used: nextUsed }));
-
-    const { error: upsertError } = await supabase.from("user_benefit_period_status").upsert(
+    const { error: upsertError } = await supabase.from("user_benefits").upsert(
       {
         user_id: userId,
         benefit_id: benefit.id,
-        period_key: benefit.current_period_key,
-        is_used: nextUsed,
-        used_at: nextUsed ? new Date().toISOString() : null,
+        used: nextUsed,
+        remind_me: nextRemindMe,
       },
-      { onConflict: "user_id,benefit_id,period_key" },
+      { onConflict: "user_id,benefit_id" },
     );
 
     if (upsertError) {
       console.error("Failed to update used status", upsertError);
-      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, is_used: !nextUsed }));
+      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: !nextUsed, remind_me: benefit.remind_me }));
       pushToast("Could not save used status. Please try again.");
       return;
     }
 
-    pushToast(nextUsed ? "Marked as used for this period." : "Usage status reset for this period.");
+    pushToast(nextUsed ? "Marked as used." : "Used status reset.");
   };
 
-  const handleEnableAll = async (card: CardGroup) => {
-    if (!userId || card.benefits.length === 0) return;
+  const getCadenceCount = (benefits: BenefitRow[], cadence: Cadence) => benefits.filter((benefit) => benefit.cadence === cadence).length;
 
-    const benefitIds = card.benefits.map((benefit) => benefit.id);
-    setCards((prev) =>
-      prev.map((entry) =>
-        entry.cardId === card.cardId
-          ? { ...entry, benefits: entry.benefits.map((benefit) => ({ ...benefit, is_enabled: true })) }
-          : entry,
-      ),
-    );
-
-    const payload = benefitIds.map((benefitId) => ({ user_id: userId, benefit_id: benefitId, is_enabled: true }));
-    const { error: enableAllError } = await supabase.from("user_benefits").upsert(payload, { onConflict: "user_id,benefit_id" });
-
-    if (enableAllError) {
-      console.error("Failed to enable all benefits for card", enableAllError);
-      await loadWalletBenefits();
-      pushToast("Could not enable all benefits for this card.");
-      return;
-    }
-
-    pushToast("Enabled all benefits for this card.");
+  const getDefaultCadence = (benefits: BenefitRow[]) => {
+    if (getCadenceCount(benefits, "monthly") > 0) return "monthly";
+    return CADENCE_ORDER.find((cadence) => getCadenceCount(benefits, cadence) > 0) ?? "monthly";
   };
 
-  const groupedByFrequency = (benefits: BenefitRow[]) => {
-    const map = new Map<Frequency, BenefitRow[]>();
-    for (const benefit of benefits) {
-      const existing = map.get(benefit.frequency) ?? [];
-      map.set(benefit.frequency, [...existing, benefit]);
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, cardId: string, cadence: Cadence) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+
+    const currentIndex = CADENCE_ORDER.indexOf(cadence);
+    let nextCadence = cadence;
+
+    if (event.key === "ArrowRight") {
+      nextCadence = CADENCE_ORDER[(currentIndex + 1) % CADENCE_ORDER.length];
+    } else if (event.key === "ArrowLeft") {
+      nextCadence = CADENCE_ORDER[(currentIndex - 1 + CADENCE_ORDER.length) % CADENCE_ORDER.length];
+    } else if (event.key === "Home") {
+      nextCadence = CADENCE_ORDER[0];
+    } else if (event.key === "End") {
+      nextCadence = CADENCE_ORDER[CADENCE_ORDER.length - 1];
     }
 
-    return FREQUENCY_ORDER.filter((frequency) => map.has(frequency)).map((frequency) => ({
-      frequency,
-      benefits: map.get(frequency) ?? [],
-    }));
+    setActiveCadenceByCardId((prev) => ({ ...prev, [cardId]: nextCadence }));
   };
 
   const activeCard = useMemo(() => cards.find((card) => card.cardId === expandedCardId) ?? null, [cards, expandedCardId]);
@@ -597,9 +598,7 @@ export function BenefitsOnboarding() {
         <Surface className="p-5 sm:p-6">
           <p className="text-xs font-medium uppercase tracking-wide text-white/55">Step 2 of 2 — Flex your benefits</p>
           <h1 className="mt-2 text-2xl font-semibold text-white">Time to flex. Pick what you actually want to track.</h1>
-          <p className="mt-2 text-sm text-white/65">
-            Turn on only the perks you care about, confirm enrollments/selections, and mark anything already used this period.
-          </p>
+          <p className="mt-2 text-sm text-white/65">Turn reminders on for active perks, and mark benefits as used once consumed.</p>
         </Surface>
 
         {cards.length === 0 ? (
@@ -613,7 +612,8 @@ export function BenefitsOnboarding() {
           <div className="space-y-3">
             {cards.map((card) => {
               const isExpanded = expandedCardId === card.cardId;
-              const grouped = groupedByFrequency(card.benefits);
+              const activeCadence = activeCadenceByCardId[card.cardId] ?? getDefaultCadence(card.benefits);
+              const activeCadenceBenefits = card.benefits.filter((benefit) => benefit.cadence === activeCadence);
 
               return (
                 <Surface key={card.cardId} className="overflow-hidden p-0">
@@ -625,7 +625,8 @@ export function BenefitsOnboarding() {
                     <div>
                       <p className="text-base font-semibold text-white">{card.cardName}</p>
                       <p className="text-xs text-white/55">
-                        {card.issuer} {card.network ? `• ${card.network}` : ""}
+                        {card.issuer}
+                        {card.network ? ` • ${card.network}` : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -638,98 +639,111 @@ export function BenefitsOnboarding() {
 
                   {isExpanded ? (
                     <div className="space-y-4 border-t border-white/10 px-5 py-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="text-xs uppercase tracking-wide text-white/50">Card controls</p>
-                        <Button size="sm" variant="secondary" onClick={() => handleEnableAll(card)}>
-                          Enable all (this card)
-                        </Button>
+                      <div className="overflow-x-auto pb-1">
+                        <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-full gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+                          {CADENCE_ORDER.map((cadence) => {
+                            const count = getCadenceCount(card.benefits, cadence);
+                            const isActive = cadence === activeCadence;
+                            return (
+                              <button
+                                key={cadence}
+                                id={`tab-${card.cardId}-${cadence}`}
+                                type="button"
+                                role="tab"
+                                aria-selected={isActive}
+                                aria-controls={`panel-${card.cardId}-${cadence}`}
+                                tabIndex={isActive ? 0 : -1}
+                                className={cn(
+                                  "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                                  isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
+                                )}
+                                onClick={() => setActiveCadenceByCardId((prev) => ({ ...prev, [card.cardId]: cadence }))}
+                                onKeyDown={(event) => handleTabKeyDown(event, card.cardId, cadence)}
+                              >
+                                {formatCadenceLabel(cadence)} ({count})
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      {grouped.map((bucket) => (
-                        <div key={bucket.frequency} className="space-y-2">
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-white/45">
-                            {formatFrequencyLabel(bucket.frequency)}
-                          </h3>
+                      <div
+                        id={`panel-${card.cardId}-${activeCadence}`}
+                        role="tabpanel"
+                        aria-labelledby={`tab-${card.cardId}-${activeCadence}`}
+                        className="space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{formatCadenceLabel(activeCadence)}</p>
+                        </div>
 
-                          <ul className="space-y-2">
-                            {bucket.benefits.map((benefit) => {
-                              const confirmationLabel = benefit.requires_selection
-                                ? "Selected"
-                                : benefit.requires_enrollment
-                                  ? "Enrolled"
-                                  : null;
-                              const value = formatMoney(benefit.value_cents);
+                        {activeCadenceBenefits.length === 0 ? (
+                          <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">
+                            No benefits in this cadence.
+                          </p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {activeCadenceBenefits.map((benefit) => {
+                              const formattedAmount = formatBenefitAmount(benefit.value_cents, benefit.cadence);
+                              const descriptionText = benefit.description?.trim();
+                              const remindMeDisabled = benefit.used;
 
                               return (
                                 <li
                                   key={benefit.id}
-                                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4 sm:py-3"
+                                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 sm:px-3.5 sm:py-2"
                                 >
-                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div className="min-w-0">
-                                      <p className="font-medium text-white/95">{benefit.display_name}</p>
-                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                                        {value ? (
-                                          <span className="rounded-full border border-[#7FB6FF]/40 bg-[#7FB6FF]/15 px-2 py-0.5 text-[#BFD8FF]">
-                                            {value}/{formatFrequencyLabel(benefit.frequency).toLowerCase()}
+                                      <p className="truncate text-sm font-medium leading-5 text-white/95">
+                                        <span>{benefit.display_name}</span>
+                                        {formattedAmount ? (
+                                          <span>
+                                            {" — "}
+                                            <span className={BENEFIT_AMOUNT_ACCENT_CLASS}>{formattedAmount}</span>
                                           </span>
                                         ) : null}
-                                        {benefit.requires_enrollment ? (
-                                          <span className="rounded-full border border-white/15 bg-white/8 px-2 py-0.5 text-white/70">
-                                            Enrollment required
-                                          </span>
-                                        ) : null}
-                                        {benefit.requires_selection ? (
-                                          <span className="rounded-full border border-white/15 bg-white/8 px-2 py-0.5 text-white/70">
-                                            Selection required
-                                          </span>
-                                        ) : null}
-                                        {benefit.is_used ? (
-                                          <span className="rounded-full border border-[#86EFAC]/40 bg-[#86EFAC]/15 px-2 py-0.5 text-[#BBF7D0]">
-                                            Used ({benefit.current_period_key})
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                      {benefit.notes ? <p className="mt-1 text-xs text-white/55">{benefit.notes}</p> : null}
+                                      </p>
+                                      {descriptionText ? <p className="truncate text-xs leading-4 text-white/60">{descriptionText}</p> : null}
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant={benefit.is_enabled ? "primary" : "secondary"}
-                                        onClick={() => updateTrack(benefit, !benefit.is_enabled)}
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                                          remindMeDisabled
+                                            ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                            : benefit.remind_me
+                                              ? "border-[#60A5FA]/40 bg-[#60A5FA]/15 text-[#BFDBFE]"
+                                              : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+                                        )}
+                                        onClick={() => updateRemindMe(benefit, !benefit.remind_me)}
+                                        disabled={remindMeDisabled}
                                       >
-                                        Track: {benefit.is_enabled ? "On" : "Off"}
-                                      </Button>
+                                        Remind Me
+                                      </button>
 
-                                      {confirmationLabel ? (
-                                        <Button
-                                          size="sm"
-                                          variant={benefit.is_enrolled ? "subtle" : "secondary"}
-                                          onClick={() => updateEnrollment(benefit, !benefit.is_enrolled)}
-                                        >
-                                          {confirmationLabel}: {benefit.is_enrolled ? "Yes" : "No"}
-                                        </Button>
-                                      ) : null}
-
-                                      {MARK_USED_FREQUENCIES.has(benefit.frequency) ? (
-                                        <Button
-                                          size="sm"
-                                          variant="secondary"
-                                          className={cn(benefit.is_used && "border border-[#86EFAC]/35 text-[#BBF7D0]")}
-                                          onClick={() => toggleUsed(benefit, !benefit.is_used)}
-                                        >
-                                          {benefit.is_used ? "Undo" : "Mark used"}
-                                        </Button>
-                                      ) : null}
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                                          benefit.used
+                                            ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
+                                            : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+                                        )}
+                                        onClick={() => updateUsed(benefit, !benefit.used)}
+                                      >
+                                        Used
+                                      </button>
                                     </div>
                                   </div>
                                 </li>
                               );
                             })}
                           </ul>
-                        </div>
-                      ))}
+                        )}
+                      </div>
                     </div>
                   ) : null}
                 </Surface>
@@ -745,9 +759,7 @@ export function BenefitsOnboarding() {
           <Button onClick={() => pushToast("All set. Your benefits setup is saved.")}>Finish Set-Up</Button>
         </Surface>
 
-        {activeCard ? (
-          <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p>
-        ) : null}
+        {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
       </div>
     </AppShell>
   );
