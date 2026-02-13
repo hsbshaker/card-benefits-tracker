@@ -824,7 +824,7 @@ export function WalletBuilder() {
 
             {pendingActionError ? <p className="mb-2 text-xs text-[#F4B4B4]">{pendingActionError}</p> : null}
 
-            <div className="mt-2 h-[9.75rem] overflow-y-auto pr-1">
+            <div className="mt-2 h-[8.5rem] overflow-y-auto pr-1">
               {pendingCards.length === 0 ? (
                 <div className="flex h-full items-center justify-center px-3 py-4">
                   <p className="text-center text-sm text-white/45">Your lineup is waiting.</p>
