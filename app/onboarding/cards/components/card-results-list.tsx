@@ -15,7 +15,6 @@ type CardResultsListProps = {
   cards: CardResult[];
   walletCardIds: Set<string>;
   onAdd: (card: CardResult) => void;
-  onAddAnother: (card: CardResult) => void;
   emptyMessage?: string;
   isLoading?: boolean;
   error?: string | null;
@@ -30,7 +29,6 @@ export function CardResultsList({
   cards,
   walletCardIds,
   onAdd,
-  onAddAnother,
   emptyMessage = "No cards found.",
   isLoading = false,
   error,
@@ -73,17 +71,15 @@ export function CardResultsList({
                       <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
                     </div>
                     {alreadyAdded ? (
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-white/55">In wallet</span>
-                        <Button
-                          size="sm"
-                          variant="subtle"
-                          onClick={() => onAddAnother(card)}
-                          className="rounded-lg px-2 py-1 text-xs"
-                        >
-                          Add Another
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="subtle"
+                        disabled
+                        className="cursor-not-allowed rounded-lg px-2 py-1 text-xs opacity-50"
+                        aria-label={`${card.display_name ?? card.card_name} is in wallet`}
+                      >
+                        In wallet
+                      </Button>
                     ) : (
                       <Button size="sm" variant="subtle" onClick={() => onAdd(card)} className="rounded-lg px-2 py-1 text-xs">
                         + Add

@@ -57,7 +57,6 @@ export function WalletBuilder() {
   const [issuerCardLoading, setIssuerCardLoading] = useState(false);
   const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
   const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
-  const [pendingIssuerDuplicate, setPendingIssuerDuplicate] = useState<CardResult | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -127,11 +126,6 @@ export function WalletBuilder() {
   const addCard = (card: CardResult) => {
     if (walletCardIds.has(card.id)) return;
     addCardInstance(card);
-  };
-
-  const addDuplicateInstance = (card: CardResult) => {
-    addCardInstance(card);
-    pushToast(`Added another ${card.display_name ?? card.card_name}.`);
   };
 
   const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
@@ -258,7 +252,6 @@ export function WalletBuilder() {
     setIssuerCardOptions([]);
     setIssuerCardError(null);
     setSelectedIssuerCardId("");
-    setPendingIssuerDuplicate(null);
 
     const selectedIssuer = ISSUER_OPTIONS.find((option) => option.id === activeIssuer);
     if (!activeIssuer || !selectedIssuer?.enabled) {
@@ -345,11 +338,8 @@ export function WalletBuilder() {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
       if (highlighted) {
-        if (walletCardIds.has(highlighted.id)) {
-          addDuplicateInstance(highlighted);
-        } else {
-          addCard(highlighted);
-        }
+        if (walletCardIds.has(highlighted.id)) return;
+        addCard(highlighted);
         resetSearchUI({ focus: true });
       }
     }
@@ -357,16 +347,13 @@ export function WalletBuilder() {
 
   const handleIssuerCardSelect = (nextCardId: string) => {
     setSelectedIssuerCardId(nextCardId);
-    if (!nextCardId) {
-      setPendingIssuerDuplicate(null);
-      return;
-    }
+    if (!nextCardId) return;
 
     const nextCard = issuerCardOptions.find((card) => card.id === nextCardId);
     if (!nextCard) return;
 
     if (walletCardIds.has(nextCard.id)) {
-      setPendingIssuerDuplicate(nextCard);
+      setSelectedIssuerCardId("");
       return;
     }
 
@@ -439,11 +426,12 @@ export function WalletBuilder() {
       const newCardIds = uniqueCardIds.filter((cardId) => !existingCardIds.has(cardId));
 
       if (newCardIds.length > 0) {
-        const { error: insertError } = await supabase.from("user_cards").insert(
+        const { error: insertError } = await supabase.from("user_cards").upsert(
           newCardIds.map((cardId) => ({
             user_id: user.id,
             card_id: cardId,
           })),
+          { onConflict: "user_id,card_id", ignoreDuplicates: true },
         );
 
         if (insertError) {
@@ -568,10 +556,6 @@ export function WalletBuilder() {
                 addCard(card);
                 resetSearchUI({ focus: true });
               }}
-              onAddAnother={(card) => {
-                addDuplicateInstance(card);
-                resetSearchUI({ focus: true });
-              }}
               isLoading={showLoading}
               error={error}
               highlightedIndex={highlightedIndex}
@@ -606,7 +590,6 @@ export function WalletBuilder() {
                     setActiveIssuer(nextIssuer);
                     if (nextIssuer === "") {
                       setSelectedIssuerCardId("");
-                      setPendingIssuerDuplicate(null);
                     }
                   }}
                   className={cn(
@@ -661,37 +644,6 @@ export function WalletBuilder() {
 
                 {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
                 {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
-                {pendingIssuerDuplicate ? (
-                  <Surface className="mt-3 rounded-xl border-[#F7C948]/30 bg-white/8 p-3">
-                    <p className="text-sm text-white/90">
-                      {pendingIssuerDuplicate.display_name ?? pendingIssuerDuplicate.card_name} is already in your wallet. Add another?
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setPendingIssuerDuplicate(null);
-                          setSelectedIssuerCardId("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => {
-                          addDuplicateInstance(pendingIssuerDuplicate);
-                          setPendingIssuerDuplicate(null);
-                          setSelectedIssuerCardId("");
-                        }}
-                      >
-                        Add another
-                      </Button>
-                    </div>
-                  </Surface>
-                ) : null}
               </div>
             </div>
           </div>
