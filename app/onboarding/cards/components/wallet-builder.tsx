@@ -389,6 +389,18 @@ export function WalletBuilder() {
     [supabase],
   );
 
+  const addCardToWallet = useCallback(
+    async (userId: string, cardId: string) =>
+      supabase.from("user_cards").upsert(
+        {
+          user_id: userId,
+          card_id: cardId,
+        },
+        { onConflict: "user_id,card_id", ignoreDuplicates: true },
+      ),
+    [supabase],
+  );
+
   const handleContinue = async () => {
     if (selectedCards.length === 0 || isSaving) return;
 
@@ -426,18 +438,13 @@ export function WalletBuilder() {
       const newCardIds = uniqueCardIds.filter((cardId) => !existingCardIds.has(cardId));
 
       if (newCardIds.length > 0) {
-        const { error: insertError } = await supabase.from("user_cards").upsert(
-          newCardIds.map((cardId) => ({
-            user_id: user.id,
-            card_id: cardId,
-          })),
-          { onConflict: "user_id,card_id", ignoreDuplicates: true },
-        );
-
-        if (insertError) {
-          console.error("Failed to save selected cards", insertError);
-          pushToast("Could not save cards right now. Please try again.");
-          return;
+        for (const cardId of newCardIds) {
+          const { error: insertError } = await addCardToWallet(user.id, cardId);
+          if (insertError) {
+            console.error("Failed to save selected cards", insertError);
+            pushToast("Could not save cards right now. Please try again.");
+            return;
+          }
         }
       }
 

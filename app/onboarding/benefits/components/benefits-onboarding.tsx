@@ -499,7 +499,7 @@ export function BenefitsOnboarding() {
 
     setUserId(user.id);
 
-    // Invariant: user_cards is unique per (user_id, card_id) enforced by DB unique index.
+    // Invariant: user_cards is unique per (user_id, card_id), enforced by DB unique index and idempotent upserts.
     const { data: walletRows, error: walletError } = await supabase
       .from("user_cards")
       .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
@@ -518,6 +518,20 @@ export function BenefitsOnboarding() {
     };
 
     const wallet = (walletRows ?? []) as unknown as WalletRow[];
+    if (process.env.NODE_ENV !== "production") {
+      const seenCardIds = new Set<string>();
+      const duplicateCardIds = new Set<string>();
+      for (const row of wallet) {
+        if (seenCardIds.has(row.card_id)) duplicateCardIds.add(row.card_id);
+        seenCardIds.add(row.card_id);
+      }
+      if (duplicateCardIds.size > 0) {
+        console.warn("[benefits-onboarding] duplicate wallet card_ids detected after load", {
+          user_id: user.id,
+          card_ids: Array.from(duplicateCardIds),
+        });
+      }
+    }
 
     if (wallet.length === 0) {
       setCards([]);
