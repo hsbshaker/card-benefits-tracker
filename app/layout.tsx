@@ -30,7 +30,7 @@ export default function RootLayout({
       >
         <div className="min-h-screen bg-[radial-gradient(120%_78%_at_50%_-14%,rgba(127,182,255,0.2),transparent_56%),radial-gradient(86%_64%_at_92%_42%,rgba(247,201,72,0.12),transparent_58%),linear-gradient(180deg,#0B1220_0%,#0B1220_58%,#0A111D_100%)]">
           <AppHeader />
-          <main className="pt-16">{children}</main>
+          <main>{children}</main>
         </div>
       </body>
     </html>
