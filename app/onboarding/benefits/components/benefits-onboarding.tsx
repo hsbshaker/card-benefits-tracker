@@ -22,7 +22,6 @@ import { createClient } from "@/utils/supabase/client";
 type Toast = { id: string; message: string };
 
 type Cadence = "monthly" | "quarterly" | "semi_annual" | "annual" | "one_time";
-type LegacyFrequency = "monthly" | "quarterly" | "semiannual" | "annual" | "activation" | "multi_year";
 
 type BenefitRow = {
   id: string;
@@ -130,15 +129,11 @@ function formatBenefitAmount(value_cents: number | null, cadence: Cadence) {
   return `${amount}/year`;
 }
 
-function normalizeCadence(cadence: string | null | undefined, frequency: LegacyFrequency | null | undefined): Cadence {
+function normalizeCadence(cadence: string | null | undefined): Cadence {
   if (cadence === "monthly" || cadence === "quarterly" || cadence === "semi_annual" || cadence === "annual" || cadence === "one_time") {
     return cadence;
   }
 
-  if (frequency === "monthly" || frequency === "quarterly" || frequency === "annual") return frequency;
-  if (frequency === "semiannual") return "semi_annual";
-  if (frequency === "activation") return "one_time";
-  if (frequency === "multi_year") return "annual";
   return "annual";
 }
 
@@ -576,52 +571,46 @@ export function BenefitsOnboarding() {
       return;
     }
 
-    const cardIds = wallet.map((row) => row.card_id);
-    const { data: cardBenefitRows, error: cardBenefitsError } = await supabase
-      .from("card_benefits")
-      .select(
-        "card_id, benefit_id, benefits!inner(id, display_name, description, cadence, cadence_detail, frequency, value_cents, requires_enrollment, requires_selection, notes)",
-      )
+    const cardIds = wallet.map((row) => row.cards.id);
+    const { data: benefitRows, error: benefitsError } = await supabase
+      .from("benefits")
+      .select("id, card_id, display_name, description, cadence, cadence_detail, value_cents, requires_enrollment, requires_selection, notes")
       .in("card_id", cardIds);
 
-    if (cardBenefitsError) {
-      console.error("Failed to load card benefits", cardBenefitsError);
+    if (benefitsError) {
+      console.error("Failed to load card benefits", benefitsError);
       setError("Could not load card benefits right now.");
       setLoading(false);
       return;
     }
 
-    const cardBenefits = (cardBenefitRows ?? []) as unknown as Array<{
+    const benefits = (benefitRows ?? []) as unknown as Array<{
       card_id: string;
-      benefit_id: string;
-      benefits: {
-        id: string;
-        display_name: string;
-        description: string | null;
-        cadence: string | null;
-        cadence_detail: Record<string, unknown> | null;
-        frequency: LegacyFrequency | null;
-        value_cents: number | null;
-        notes: string | null;
-      };
+      id: string;
+      display_name: string;
+      description: string | null;
+      cadence: string | null;
+      cadence_detail: Record<string, unknown> | null;
+      value_cents: number | null;
+      notes: string | null;
     }>;
 
     if (process.env.NODE_ENV !== "production") {
       const benefitCountByCard = new Map<string, number>();
-      for (const row of cardBenefits) {
+      for (const row of benefits) {
         benefitCountByCard.set(row.card_id, (benefitCountByCard.get(row.card_id) ?? 0) + 1);
       }
 
       for (const walletCard of wallet) {
         console.debug("[benefits-onboarding] card benefit match", {
-          card_id: walletCard.card_id,
+          card_id: walletCard.cards.id,
           product_key: walletCard.cards.product_key,
-          matched_benefits: benefitCountByCard.get(walletCard.card_id) ?? 0,
+          matched_benefits: benefitCountByCard.get(walletCard.cards.id) ?? 0,
         });
       }
     }
 
-    const benefitIds = Array.from(new Set(cardBenefits.map((row) => row.benefit_id)));
+    const benefitIds = Array.from(new Set(benefits.map((row) => row.id)));
 
     let { data: userBenefitRows, error: userBenefitsError } = await supabase
       .from("user_benefits")
@@ -640,9 +629,9 @@ export function BenefitsOnboarding() {
 
     const cardsMissingUserBenefits = new Set<string>();
     for (const card of wallet) {
-      const cardBenefitIds = cardBenefits.filter((row) => row.card_id === card.card_id).map((row) => row.benefit_id);
+      const cardBenefitIds = benefits.filter((row) => row.card_id === card.cards.id).map((row) => row.id);
       if (cardBenefitIds.some((benefitId) => !userBenefitMap.has(benefitId))) {
-        cardsMissingUserBenefits.add(card.card_id);
+        cardsMissingUserBenefits.add(card.cards.id);
       }
     }
 
@@ -678,25 +667,25 @@ export function BenefitsOnboarding() {
 
     const nextCards: CardGroup[] = wallet
       .map((walletCard) => {
-        const benefitsForCard = cardBenefits
-          .filter((cb) => cb.card_id === walletCard.card_id)
+        const benefitsForCard = benefits
+          .filter((benefit) => benefit.card_id === walletCard.cards.id)
           .sort(
             (a, b) =>
-              CADENCE_ORDER.indexOf(normalizeCadence(a.benefits.cadence, a.benefits.frequency)) -
-                CADENCE_ORDER.indexOf(normalizeCadence(b.benefits.cadence, b.benefits.frequency)) ||
-              a.benefits.display_name.localeCompare(b.benefits.display_name),
+              CADENCE_ORDER.indexOf(normalizeCadence(a.cadence)) -
+                CADENCE_ORDER.indexOf(normalizeCadence(b.cadence)) ||
+              a.display_name.localeCompare(b.display_name),
           )
-          .map((cb) => {
-            const userBenefit = refreshedUserBenefitMap.get(cb.benefit_id);
+          .map((benefit) => {
+            const userBenefit = refreshedUserBenefitMap.get(benefit.id);
 
             return {
-              id: cb.benefit_id,
-              display_name: cb.benefits.display_name,
-              description: cb.benefits.description,
-              cadence: normalizeCadence(cb.benefits.cadence, cb.benefits.frequency),
-              cadence_detail: cb.benefits.cadence_detail,
-              value_cents: cb.benefits.value_cents,
-              notes: cb.benefits.notes,
+              id: benefit.id,
+              display_name: benefit.display_name,
+              description: benefit.description,
+              cadence: normalizeCadence(benefit.cadence),
+              cadence_detail: benefit.cadence_detail,
+              value_cents: benefit.value_cents,
+              notes: benefit.notes,
               user_benefit_id: userBenefit?.id ?? null,
               remind_me:
                 typeof userBenefit?.remind_me === "boolean"
@@ -709,7 +698,7 @@ export function BenefitsOnboarding() {
           });
 
         return {
-          cardId: walletCard.card_id,
+          cardId: walletCard.cards.id,
           cardName: walletCard.cards.display_name ?? walletCard.cards.card_name,
           productKey: walletCard.cards.product_key,
           issuer: normalizeIssuerDisplayName(walletCard.cards.issuer),

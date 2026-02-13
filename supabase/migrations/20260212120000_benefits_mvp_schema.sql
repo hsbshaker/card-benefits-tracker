@@ -102,7 +102,7 @@ create table if not exists public.benefits (
   benefit_key text not null unique,
   display_name text not null,
   category text not null,
-  frequency text not null check (frequency in ('monthly', 'quarterly', 'semiannual', 'annual', 'activation', 'multi_year')),
+  cadence text not null check (cadence in ('monthly', 'quarterly', 'semi_annual', 'annual', 'one_time')),
   value_cents integer,
   requires_enrollment boolean not null default false,
   requires_selection boolean not null default false,
@@ -424,13 +424,13 @@ do update set
   network = excluded.network;
 
 -- Seed benefits
-insert into public.benefits (card_id, benefit_key, display_name, category, frequency, value_cents, requires_enrollment, requires_selection, selection_type, notes)
+insert into public.benefits (card_id, benefit_key, display_name, category, cadence, value_cents, requires_enrollment, requires_selection, selection_type, notes)
 select
   c.id,
   seeded_benefits.benefit_key,
   seeded_benefits.display_name,
   seeded_benefits.category,
-  seeded_benefits.frequency,
+  seeded_benefits.cadence,
   seeded_benefits.value_cents,
   seeded_benefits.requires_enrollment,
   seeded_benefits.requires_selection,
@@ -445,22 +445,22 @@ cross join (
     ('equinox_credit', 'Equinox Credit', 'fitness', 'monthly', null, false, false, null, 'Tracked as one benefit; annual cap nuances are intentionally stored in notes.'),
     ('lululemon_credit', 'lululemon Credit', 'shopping', 'quarterly', null, false, false, null, null),
     ('resy_credit', 'Resy Credit', 'dining', 'quarterly', null, false, false, null, null),
-    ('saks_credit', 'Saks Credit', 'shopping', 'semiannual', null, false, false, null, null),
+    ('saks_credit', 'Saks Credit', 'shopping', 'semi_annual', null, false, false, null, null),
     ('airline_fee_credit', 'Airline Fee Credit', 'travel', 'annual', null, true, true, 'airline', 'Requires airline selection and enrollment with issuer.'),
     ('clear_credit', 'CLEAR Credit', 'travel', 'annual', null, false, false, null, null),
     ('hotel_collection_credit', 'Hotel Collection Credit', 'travel', 'annual', null, false, false, null, null),
     ('uber_one_credit', 'Uber One Credit', 'lifestyle', 'annual', null, false, false, null, null),
     ('oura_credit', 'Oura Credit', 'wellness', 'annual', null, false, false, null, null),
-    ('global_entry_tsa_credit', 'Global Entry/TSA PreCheck Credit', 'travel', 'multi_year', null, false, false, null, 'Modeled as multi_year due to long renewal cadence; still tracked as boolean use status.'),
-    ('airline_selected', 'Airline Selected', 'travel', 'activation', null, false, true, 'airline', 'Activation/selection state used for airline-dependent benefits.'),
-    ('priority_pass_enrolled', 'Priority Pass Enrolled', 'travel', 'activation', null, true, false, null, null),
-    ('hilton_gold_enrolled', 'Hilton Gold Enrolled', 'hotel_status', 'activation', null, true, false, null, null),
-    ('marriott_gold_enrolled', 'Marriott Gold Enrolled', 'hotel_status', 'activation', null, true, false, null, null)
+    ('global_entry_tsa_credit', 'Global Entry/TSA PreCheck Credit', 'travel', 'annual', null, false, false, null, 'Modeled as annual due to long renewal cadence; still tracked as boolean use status.'),
+    ('airline_selected', 'Airline Selected', 'travel', 'one_time', null, false, true, 'airline', 'Activation/selection state used for airline-dependent benefits.'),
+    ('priority_pass_enrolled', 'Priority Pass Enrolled', 'travel', 'one_time', null, true, false, null, null),
+    ('hilton_gold_enrolled', 'Hilton Gold Enrolled', 'hotel_status', 'one_time', null, true, false, null, null),
+    ('marriott_gold_enrolled', 'Marriott Gold Enrolled', 'hotel_status', 'one_time', null, true, false, null, null)
 ) as seeded_benefits (
   benefit_key,
   display_name,
   category,
-  frequency,
+  cadence,
   value_cents,
   requires_enrollment,
   requires_selection,
@@ -473,7 +473,7 @@ do update set
   card_id = excluded.card_id,
   display_name = excluded.display_name,
   category = excluded.category,
-  frequency = excluded.frequency,
+  cadence = excluded.cadence,
   value_cents = excluded.value_cents,
   requires_enrollment = excluded.requires_enrollment,
   requires_selection = excluded.requires_selection,

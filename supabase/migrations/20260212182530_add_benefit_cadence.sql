@@ -3,17 +3,9 @@ alter table if exists public.benefits
   add column if not exists cadence text,
   add column if not exists cadence_detail jsonb;
 
--- Backfill cadence from legacy frequency values where needed.
+-- Backfill any null cadence rows to a safe default.
 update public.benefits
-set cadence = case frequency
-  when 'monthly' then 'monthly'
-  when 'quarterly' then 'quarterly'
-  when 'semiannual' then 'semi_annual'
-  when 'annual' then 'annual'
-  when 'activation' then 'one_time'
-  when 'multi_year' then 'annual'
-  else 'annual'
-end
+set cadence = 'annual'
 where cadence is null;
 
 alter table if exists public.benefits
