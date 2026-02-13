@@ -10,9 +10,9 @@ import {
   useState,
   type KeyboardEvent,
   type ProfilerOnRenderCallback,
-  type UIEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -282,45 +282,28 @@ const VirtualizedBenefitsList = memo(function VirtualizedBenefitsList({
   onToggleRemindMe,
   onToggleUsed,
 }: VirtualizedBenefitsListProps) {
-  const [scrollTop, setScrollTop] = useState(0);
-  const pendingScrollTopRef = useRef(0);
-  const animationFrameRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (animationFrameRef.current != null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
-
-  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-    pendingScrollTopRef.current = event.currentTarget.scrollTop;
-    if (animationFrameRef.current != null) return;
-    animationFrameRef.current = window.requestAnimationFrame(() => {
-      animationFrameRef.current = null;
-      setScrollTop(pendingScrollTopRef.current);
-    });
-  }, []);
-
+  const parentRef = useRef<HTMLDivElement>(null);
   const viewportHeight = Math.min(benefits.length, VIRTUAL_LIST_MAX_VISIBLE_ROWS) * BENEFIT_ROW_HEIGHT;
-  const totalHeight = benefits.length * BENEFIT_ROW_HEIGHT;
-  const overscan = 4;
-  const startIndex = Math.max(0, Math.floor(scrollTop / BENEFIT_ROW_HEIGHT) - overscan);
-  const endIndex = Math.min(benefits.length, Math.ceil((scrollTop + viewportHeight) / BENEFIT_ROW_HEIGHT) + overscan);
-  const visibleBenefits = benefits.slice(startIndex, endIndex);
+  const rowVirtualizer = useVirtualizer({
+    count: benefits.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => BENEFIT_ROW_HEIGHT,
+    overscan: 4,
+    getItemKey: (index) => benefits[index]?.id ?? index,
+  });
 
   return (
-    <div className="overflow-y-auto pr-1" style={{ height: viewportHeight }} onScroll={handleScroll}>
-      <ul className="relative" style={{ height: totalHeight }}>
-        {visibleBenefits.map((benefit, index) => {
-          const absoluteIndex = startIndex + index;
+    <div ref={parentRef} className="overflow-y-auto pr-1" style={{ height: viewportHeight }}>
+      <ul className="relative" style={{ height: rowVirtualizer.getTotalSize() }}>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const benefit = benefits[virtualRow.index];
+          if (!benefit) return null;
           return (
             <li
               key={benefit.id}
               className="absolute left-0 right-0"
               style={{
-                top: absoluteIndex * BENEFIT_ROW_HEIGHT,
+                transform: `translateY(${virtualRow.start}px)`,
                 height: BENEFIT_ROW_HEIGHT,
               }}
             >
