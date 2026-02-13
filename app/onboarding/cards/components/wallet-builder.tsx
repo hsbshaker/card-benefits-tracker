@@ -2,6 +2,7 @@
 
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -50,6 +51,7 @@ const controlClasses =
   "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
 export function WalletBuilder() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
@@ -71,6 +73,7 @@ export function WalletBuilder() {
   const [pendingActionError, setPendingActionError] = useState<string | null>(null);
   const [committingPendingIds, setCommittingPendingIds] = useState<Set<string>>(new Set());
   const [showScrollCue, setShowScrollCue] = useState(false);
+  const [showWalletScrollCue, setShowWalletScrollCue] = useState(false);
 
   const requestAbortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -80,6 +83,7 @@ export function WalletBuilder() {
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const resultsOverlayRef = useRef<HTMLDivElement | null>(null);
   const pendingListRef = useRef<HTMLDivElement | null>(null);
+  const walletListRef = useRef<HTMLDivElement | null>(null);
   const loadingDelayRef = useRef<number | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [resultsOverlayStyle, setResultsOverlayStyle] = useState<{
@@ -421,20 +425,36 @@ export function WalletBuilder() {
     setShowScrollCue(canScroll && !atBottom);
   }, []);
 
+  const updateWalletScrollCue = useCallback(() => {
+    const element = walletListRef.current;
+    if (!element) return;
+
+    const canScroll = element.scrollHeight > element.clientHeight + 1;
+    const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 8;
+    setShowWalletScrollCue(canScroll && !atBottom);
+  }, []);
+
   useEffect(() => {
     const animationFrame = window.requestAnimationFrame(updatePendingScrollCue);
     window.addEventListener("resize", updatePendingScrollCue);
+    window.addEventListener("resize", updateWalletScrollCue);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", updatePendingScrollCue);
+      window.removeEventListener("resize", updateWalletScrollCue);
     };
-  }, [updatePendingScrollCue]);
+  }, [updatePendingScrollCue, updateWalletScrollCue]);
 
   useEffect(() => {
     const animationFrame = window.requestAnimationFrame(updatePendingScrollCue);
     return () => window.cancelAnimationFrame(animationFrame);
   }, [pendingCards.length, updatePendingScrollCue]);
+
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(updateWalletScrollCue);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [savedCards.length, isWalletLoading, updateWalletScrollCue]);
 
   const handleResultsKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (!shouldShowResults || results.length === 0) return;
@@ -863,7 +883,7 @@ export function WalletBuilder() {
               <div ref={pendingListRef} className="h-full overflow-y-auto pr-1" onScroll={updatePendingScrollCue}>
                 {pendingCards.length === 0 ? (
                   <div className="flex h-full items-center justify-center px-3 py-4">
-                    <p className="text-center text-sm text-white/45">Your lineup is waiting.</p>
+                    <p className="text-center text-sm text-white/45">Use the search on the left to start adding cards to your wallet.</p>
                   </div>
                 ) : (
                   <ul className="space-y-1">
@@ -909,7 +929,7 @@ export function WalletBuilder() {
               >
                 <svg
                   viewBox="0 0 20 20"
-                  className="absolute bottom-2 left-1/2 h-4 w-4 -translate-x-1/2 text-white/35"
+                  className="absolute bottom-0 left-1/2 h-4 w-4 -translate-x-1/2 text-white/35"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
@@ -935,35 +955,65 @@ export function WalletBuilder() {
           ) : savedCards.length === 0 ? (
             <p className="py-10 text-center text-sm text-white/45">Your lineup starts here.</p>
           ) : (
-            <div className="max-h-[24rem] overflow-y-auto pr-1">
-              <ul className="space-y-2">
-                {savedCards.map((card) => (
-                  <li
-                    key={card.instanceId}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-white/14 bg-white/9 px-3 py-2.5 transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate pr-2 text-sm font-medium text-white/90">{card.display_name ?? card.card_name}</p>
-                      <p className="mt-0.5 text-xs text-white/55">
-                        {card.issuer}
-                        {" • "}
-                        {card.network ?? "N/A"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="ml-auto shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
-                      onClick={() => handleRequestRemove(card)}
-                      aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
+            <div className="relative max-h-[24rem]">
+              <div ref={walletListRef} className="max-h-[24rem] overflow-y-auto pr-1" onScroll={updateWalletScrollCue}>
+                <ul className="space-y-2">
+                  {savedCards.map((card) => (
+                    <li
+                      key={card.instanceId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/14 bg-white/9 px-3 py-2.5 transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
                     >
-                      Remove From Wallet
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      <div className="min-w-0">
+                        <p className="truncate pr-2 text-sm font-medium text-white/90">{card.display_name ?? card.card_name}</p>
+                        <p className="mt-0.5 text-xs text-white/55">
+                          {card.issuer}
+                          {" • "}
+                          {card.network ?? "N/A"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="ml-auto shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
+                        onClick={() => handleRequestRemove(card)}
+                        aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
+                      >
+                        Remove From Wallet
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div
+                className={cn(
+                  "pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#232833] to-transparent transition-opacity duration-200",
+                  showWalletScrollCue ? "opacity-100" : "opacity-0",
+                )}
+                aria-hidden
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  className="absolute bottom-0 left-1/2 h-4 w-4 -translate-x-1/2 text-white/35"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="m5.5 7.5 4.5 4.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
             </div>
           )}
         </Surface>
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => router.push("/onboarding/benefits")}
+            disabled={savedCards.length === 0}
+            className="rounded-lg px-3 text-sm"
+          >
+            Personalize Your Benefits →
+          </Button>
+        </div>
       </div>
 
       {removeTargetCard ? (
