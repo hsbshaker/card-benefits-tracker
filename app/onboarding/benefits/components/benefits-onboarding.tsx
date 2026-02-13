@@ -730,7 +730,7 @@ export function BenefitsOnboarding() {
       }
       return next;
     });
-    setExpandedCardId((prev) => prev ?? nextCards[0]?.cardId ?? null);
+    setExpandedCardId((prev) => (prev && nextCards.some((card) => card.cardId === prev) ? prev : null));
     setActiveCadenceByCardId((prev) => {
       const next: Record<string, Cadence> = {};
       for (const card of nextCards) {
