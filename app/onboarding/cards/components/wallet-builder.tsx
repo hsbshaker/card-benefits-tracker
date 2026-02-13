@@ -654,8 +654,8 @@ export function WalletBuilder() {
       </div>
 
       <div className="space-y-6">
-        <div className="grid items-stretch gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Surface as="section" className="relative z-30 h-full overflow-visible p-4 sm:p-5">
+        <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Surface as="section" className="relative z-30 overflow-visible p-4 sm:p-5">
             <div ref={searchAreaRef}>
               <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
                 <span className="font-semibold">Search cards</span>
@@ -812,7 +812,7 @@ export function WalletBuilder() {
             </div>
           </Surface>
 
-          <Surface as="aside" className="flex h-full flex-col p-4 sm:p-5">
+          <Surface as="aside" className="flex flex-col p-4 sm:p-5">
             <div className="mb-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-white/60">
@@ -827,7 +827,7 @@ export function WalletBuilder() {
             {pendingCards.length === 0 ? (
               <p className="mt-6 px-3 py-4 text-center text-sm text-white/45">Your lineup is waiting.</p>
             ) : (
-              <div className="mt-2 max-h-[6.5rem] overflow-y-auto pr-1">
+              <div className="mt-2 h-[9.75rem] overflow-y-auto pr-1">
                 <ul className="space-y-1">
                   {pendingCards.map((card) => (
                     <li
