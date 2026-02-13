@@ -945,7 +945,7 @@ export function WalletBuilder() {
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-white/60">
-                <span className="font-semibold">Viero Wallet</span> ({savedCards.length})
+                <span className="font-semibold">Memento Wallet</span> ({savedCards.length})
               </p>
             </div>
           </div>
