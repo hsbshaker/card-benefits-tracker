@@ -43,6 +43,13 @@ type UserBenefitRecord = {
   is_enabled?: boolean | null;
 };
 
+type SupabaseErrorLike = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semi_annual", "annual", "one_time"];
 const BENEFIT_AMOUNT_ACCENT_CLASS = "text-[#F7C948]";
 const ISSUER_DISPLAY_MAP: Record<string, string> = {
@@ -127,6 +134,27 @@ function normalizeNetworkDisplayName(rawNetwork: string | null) {
   if (!rawNetwork) return null;
   const normalizedKey = rawNetwork.trim().toLowerCase();
   return NETWORK_DISPLAY_MAP[normalizedKey] ?? toTitleCase(rawNetwork);
+}
+
+function describeSupabaseError(error: unknown) {
+  const err = (error ?? {}) as SupabaseErrorLike;
+  return {
+    message: err.message,
+    code: err.code,
+    details: err.details,
+    hint: err.hint,
+    raw: error,
+    stringified:
+      typeof error === "string"
+        ? error
+        : (() => {
+            try {
+              return JSON.stringify(error);
+            } catch {
+              return String(error);
+            }
+          })(),
+  };
 }
 
 export function BenefitsOnboarding() {
@@ -501,7 +529,7 @@ export function BenefitsOnboarding() {
 
     updateBenefitLocal(benefit.id, (prev) => ({ ...prev, remind_me: nextValue }));
 
-    const { error: updateError } = await supabase
+    const { data: savedRow, error: updateError } = await supabase
       .from("user_benefits")
       .upsert(
         {
@@ -511,14 +539,24 @@ export function BenefitsOnboarding() {
           used: benefit.used,
         },
         { onConflict: "user_id,benefit_id" },
-      );
+      )
+      .select("id, benefit_id, remind_me, used")
+      .single();
 
     if (updateError) {
-      console.error("Failed to update remind me status", updateError);
+      const errorDetails = describeSupabaseError(updateError);
+      console.error("Failed to update remind me status", errorDetails);
       updateBenefitLocal(benefit.id, (prev) => ({ ...prev, remind_me: !nextValue }));
-      pushToast("Could not save reminder setting. Please try again.");
+      pushToast(`Could not save. ${errorDetails.message ?? "Please try again."}`);
       return;
     }
+
+    updateBenefitLocal(benefit.id, (prev) => ({
+      ...prev,
+      user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
+      remind_me: savedRow?.remind_me ?? nextValue,
+      used: savedRow?.used ?? prev.used,
+    }));
 
     pushToast(nextValue ? "Reminder enabled." : "Reminder disabled.");
   };
@@ -529,22 +567,34 @@ export function BenefitsOnboarding() {
 
     updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: nextUsed, remind_me: nextRemindMe }));
 
-    const { error: upsertError } = await supabase.from("user_benefits").upsert(
-      {
-        user_id: userId,
-        benefit_id: benefit.id,
-        used: nextUsed,
-        remind_me: nextRemindMe,
-      },
-      { onConflict: "user_id,benefit_id" },
-    );
+    const { data: savedRow, error: upsertError } = await supabase
+      .from("user_benefits")
+      .upsert(
+        {
+          user_id: userId,
+          benefit_id: benefit.id,
+          used: nextUsed,
+          remind_me: nextRemindMe,
+        },
+        { onConflict: "user_id,benefit_id" },
+      )
+      .select("id, benefit_id, remind_me, used")
+      .single();
 
     if (upsertError) {
-      console.error("Failed to update used status", upsertError);
+      const errorDetails = describeSupabaseError(upsertError);
+      console.error("Failed to update used status", errorDetails);
       updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: !nextUsed, remind_me: benefit.remind_me }));
-      pushToast("Could not save used status. Please try again.");
+      pushToast(`Could not save. ${errorDetails.message ?? "Please try again."}`);
       return;
     }
+
+    updateBenefitLocal(benefit.id, (prev) => ({
+      ...prev,
+      user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
+      used: savedRow?.used ?? nextUsed,
+      remind_me: savedRow?.remind_me ?? nextRemindMe,
+    }));
 
     pushToast(nextUsed ? "Marked as used." : "Used status reset.");
   };
