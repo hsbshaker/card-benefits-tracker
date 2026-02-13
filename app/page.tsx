@@ -29,7 +29,7 @@ export default function LandingPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding/cards`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding/build-your-lineup`,
       },
     });
 

@@ -1002,7 +1002,7 @@ export function BenefitsOnboarding() {
           />
           <button
             type="button"
-            onClick={() => router.push("/onboarding/cards")}
+            onClick={() => router.push("/onboarding/build-your-lineup")}
             className="mt-3 inline-flex items-center rounded-lg px-2 py-1 text-sm text-white/60 transition hover:text-white/85 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220]"
           >
             ← Back to Wallet Setup
@@ -1041,7 +1041,7 @@ export function BenefitsOnboarding() {
           )}
 
           <div className="sticky bottom-3 z-30 flex items-center justify-end">
-            <Button onClick={() => pushToast("All set. Your benefits setup is saved.")}>Go to My Dashboard</Button>
+            <Button onClick={() => router.push("/dashboard")}>Go to My Dashboard</Button>
           </div>
 
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}

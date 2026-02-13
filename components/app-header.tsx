@@ -15,7 +15,7 @@ type Tab = {
 };
 
 const tabs: Tab[] = [
-  { id: "wallet", label: "Wallet Builder", href: "/onboarding/cards", comingSoon: false },
+  { id: "wallet", label: "Wallet Builder", href: "/onboarding/build-your-lineup", comingSoon: false },
   { id: "dashboard", label: "Dashboard", href: "/dashboard", comingSoon: true },
   { id: "benefits", label: "Benefits Tracker", href: "/benefits", comingSoon: true },
 ];
@@ -26,7 +26,7 @@ export function AppHeader() {
   const navRef = useRef<HTMLDivElement | null>(null);
 
   const activeTab = useMemo<TabId | null>(() => {
-    if (pathname.startsWith("/onboarding/cards") || pathname.startsWith("/wallet")) return "wallet";
+    if (pathname.startsWith("/onboarding/build-your-lineup") || pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/dashboard")) return "dashboard";
     if (pathname.startsWith("/benefits")) return "benefits";
     return null;

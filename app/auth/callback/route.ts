@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const nextParam = url.searchParams.get("next");
-  const next = nextParam?.startsWith("/") ? nextParam : "/onboarding/cards";
+  const next = nextParam?.startsWith("/") ? nextParam : "/onboarding/build-your-lineup";
 
   const errorRedirect = NextResponse.redirect(new URL("/login", request.url));
 
