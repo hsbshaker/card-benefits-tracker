@@ -86,7 +86,7 @@ export default async function OnboardingSuccessPage() {
             <div className="space-y-3">
               <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">You&apos;re all set, {firstName}.</h1>
               <p className="mx-auto max-w-[620px] text-sm text-white/72 sm:text-base">
-                We&apos;ll email you before benefits expire so you never leave value on the table.
+                We&apos;ll email you before your benefits expire so you never leave money on the table.
               </p>
             </div>
           </section>
@@ -102,20 +102,19 @@ export default async function OnboardingSuccessPage() {
               <ul className="space-y-3 text-sm text-white/82 sm:text-[15px]">
                 <li className="flex items-start gap-2.5">
                   <SmallCheckIcon />
-                  <span>Email reminders before statement credits and perks expire</span>
+                  <span>Email reminders before credits expire</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <SmallCheckIcon />
-                  <span>Monthly nudges for recurring benefits</span>
+                  <span>Monthly and quarterly nudges for recurring benefits</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <SmallCheckIcon />
-                  <span>Update your preferences anytime</span>
+                  <span>Update your reminder preferences anytime</span>
                 </li>
               </ul>
-
-              <p className="pt-1 text-xs text-white/55">You can close this tab - we&apos;ve got it from here.</p>
             </Surface>
+            <p className="pt-3 text-center text-xs text-white/55">You can close this tab - we&apos;ve got it from here.</p>
           </section>
         </div>
       </div>

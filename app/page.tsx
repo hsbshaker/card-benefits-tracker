@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -20,8 +21,37 @@ const fadeUp = {
 
 
 export default function LandingPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadUser = async () => {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) return;
+      setUser(currentUser ?? null);
+    };
+
+    void loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   async function signInWithGoogle() {
     setIsSigningIn(true);
@@ -39,13 +69,43 @@ export default function LandingPage() {
     }
   }
 
+  async function signOut() {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) {
+      setIsSigningOut(false);
+      alert(error.message);
+      return;
+    }
+
+    setUser(null);
+    setIsSigningOut(false);
+    window.location.assign("/");
+  }
+
+  function getFirstName(currentUser: User | null | undefined) {
+    if (!currentUser) return "there";
+
+    const metadata = (currentUser.user_metadata ?? {}) as Record<string, unknown>;
+    const fullName = typeof metadata.full_name === "string" ? metadata.full_name.trim() : "";
+    if (fullName) return fullName.split(/\s+/)[0];
+
+    const name = typeof metadata.name === "string" ? metadata.name.trim() : "";
+    if (name) return name.split(/\s+/)[0];
+
+    const emailPrefix = typeof currentUser.email === "string" ? currentUser.email.split("@")[0] : "";
+    if (emailPrefix) return emailPrefix;
+
+    return "there";
+  }
+
+  const firstName = getFirstName(user);
+
   return (
     <AppShell>
-      <div className="flex justify-end">
-        <Button onClick={signInWithGoogle} disabled={isSigningIn} size="sm" className="shadow-[0_10px_35px_-15px_rgba(127,182,255,0.7)]">
-          Continue with Google
-        </Button>
-      </div>
+      <div aria-hidden className="h-9" />
 
       <section className="pt-12 md:pt-14">
         <div className="max-w-3xl">
@@ -72,19 +132,34 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center"
+            className="mt-7 flex flex-col gap-3"
           >
-            <Button onClick={signInWithGoogle} disabled={isSigningIn} size="lg" className="group">
-              Continue with Google
-              <span className="text-[#08111F]/70 transition group-hover:text-[#08111F]">→</span>
-            </Button>
+            {user === undefined ? (
+              <div aria-hidden className="h-[3.5rem] w-[14.5rem] opacity-0" />
+            ) : user ? (
+              <Link href="/onboarding/benefits">
+                <Button size="lg" className="group">
+                  Enter Viero
+                  <span className="text-[#08111F]/70 transition group-hover:text-[#08111F]">→</span>
+                </Button>
+              </Link>
+            ) : (
+              <Button onClick={signInWithGoogle} disabled={isSigningIn} size="lg" className="group">
+                Continue with Google
+                <span className="text-[#08111F]/70 transition group-hover:text-[#08111F]">→</span>
+              </Button>
+            )}
 
-            <a
-              href="#"
-              className="inline-flex items-center justify-center rounded-2xl bg-white/5 px-7 py-3.5 text-base font-semibold text-white/85 ring-1 ring-white/10 transition duration-200 ease-out hover:bg-white/10"
-            >
-              How it works
-            </a>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                disabled={isSigningOut}
+                className="w-fit text-sm text-white/70 underline-offset-4 transition hover:text-white/90 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220] disabled:cursor-not-allowed disabled:text-white/45"
+              >
+                Not {firstName}? Sign-Out
+              </button>
+            ) : null}
           </motion.div>
         </div>
       </section>
