@@ -281,23 +281,23 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
         )}
       >
         {isEnrollmentBenefit ? (
-          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-            <div className="min-w-0 flex flex-col gap-2">
-              <p className="min-w-0 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
-              {formattedAmount ? (
-                <span
-                  className={cn(
-                    "inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-3 py-1 text-sm font-medium leading-none",
-                    BENEFIT_AMOUNT_ACCENT_CLASS,
-                  )}
-                >
-                  {formattedAmount}
-                </span>
-              ) : null}
+          <div className="min-w-0 flex flex-col gap-3">
+            <p className="min-w-0 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
+            {formattedAmount ? (
+              <span
+                className={cn(
+                  "inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-3 py-1 text-sm font-medium leading-none",
+                  BENEFIT_AMOUNT_ACCENT_CLASS,
+                )}
+              >
+                {formattedAmount}
+              </span>
+            ) : null}
+            <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 className={cn(
-                  "inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                  "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-sm font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
                   benefit.used
                     ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
                     : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
@@ -310,23 +310,23 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
                 Already Enrolled
                 {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
               </button>
-            </div>
 
-            {!benefit.used ? (
-              <a
-                href={enrollmentUrl ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-10 shrink-0 self-center items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#86EFAC]/35 bg-emerald-400/12 px-4 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                onClick={(event) => {
-                  event.stopPropagation();
-                }}
-                aria-label="Enroll now (opens external site)"
-              >
-                <span>Enroll Now</span>
-                <ExternalLinkIcon className="h-4 w-4 shrink-0" />
-              </a>
-            ) : null}
+              {!benefit.used ? (
+                <a
+                  href={enrollmentUrl ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#86EFAC]/35 bg-emerald-400/12 px-4 text-sm font-medium leading-none text-emerald-100 transition-colors hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  aria-label="Enroll now (opens external site)"
+                >
+                  <span>Enroll Now</span>
+                  <ExternalLinkIcon className="h-4 w-4 shrink-0" />
+                </a>
+              ) : null}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-[1fr_auto] items-start gap-2">
