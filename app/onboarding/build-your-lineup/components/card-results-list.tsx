@@ -1,5 +1,4 @@
 import { Surface } from "@/components/ui/Surface";
-import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
 export type CardResult = {
@@ -58,42 +57,38 @@ export function CardResultsList({
               const isSaved = savedCardIds.has(card.id);
               const isPending = pendingCardIds.has(card.id);
               const isUnavailable = isSaved || isPending;
+              const label = card.display_name ?? card.card_name;
+
+              const handleRowClick = () => {
+                if (isUnavailable) return;
+                onAdd(card);
+              };
 
               return (
                 <li key={`${card.id}-${index}`}>
-                  <div
+                  <button
+                    type="button"
+                    disabled={isUnavailable}
+                    onClick={handleRowClick}
                     className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm",
-                      rowTransition,
-                      highlighted
-                        ? "border-[#F7C948]/40 bg-[#F7C948]/12 text-white"
-                        : "text-white/90 hover:border-[#F7C948]/30 hover:bg-[#F7C948]/10 hover:text-white",
+                      "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm transition-all duration-150",
+                      isUnavailable
+                        ? "cursor-not-allowed opacity-60"
+                        : cn(
+                            rowTransition,
+                            "active:scale-[0.99]",
+                            highlighted
+                              ? "border-[#F7C948]/40 bg-[#F7C948]/12 text-white"
+                              : "text-white/90 hover:border-[#F7C948]/30 hover:bg-white/10 hover:text-white active:bg-white/12",
+                          ),
                     )}
                   >
                     <div className="min-w-0">
-                      <p className="truncate">{card.display_name ?? card.card_name}</p>
+                      <p className="truncate">{label}</p>
                       <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
                     </div>
-                    {isUnavailable ? (
-                      <Button
-                        size="sm"
-                        variant="subtle"
-                        disabled
-                        className="cursor-not-allowed rounded-lg px-2 py-1 text-xs opacity-50"
-                        aria-label={
-                          isSaved
-                            ? `${card.display_name ?? card.card_name} is in wallet`
-                            : `${card.display_name ?? card.card_name} is pending add`
-                        }
-                      >
-                        {isSaved ? "Saved" : "Pending"}
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="subtle" onClick={() => onAdd(card)} className="rounded-lg px-2 py-1 text-xs">
-                        + Add
-                      </Button>
-                    )}
-                  </div>
+                    {isUnavailable ? <span className="shrink-0 text-xs text-white/55">Saved</span> : null}
+                  </button>
                 </li>
               );
             })}

@@ -79,6 +79,7 @@ export function WalletBuilder() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
+  const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [results, setResults] = useState<CardResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
@@ -97,6 +98,7 @@ export function WalletBuilder() {
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
   const [pendingActionError, setPendingActionError] = useState<string | null>(null);
+  const [showAddedToast, setShowAddedToast] = useState(false);
   const [committingPendingIds, setCommittingPendingIds] = useState<Set<string>>(new Set());
   const [showScrollCue, setShowScrollCue] = useState(false);
   const [showWalletScrollCue, setShowWalletScrollCue] = useState(false);
@@ -111,6 +113,7 @@ export function WalletBuilder() {
   const pendingListRef = useRef<HTMLDivElement | null>(null);
   const walletListRef = useRef<HTMLDivElement | null>(null);
   const loadingDelayRef = useRef<number | null>(null);
+  const addToastTimerRef = useRef<number | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [resultsOverlayStyle, setResultsOverlayStyle] = useState<{
     top: number;
@@ -120,7 +123,7 @@ export function WalletBuilder() {
 
   const normalizedQuery = query.trim();
   const isSearching = normalizedQuery.length > 0;
-  const shouldShowResults = normalizedQuery.length >= 1;
+  const shouldShowResults = isResultsOpen && normalizedQuery.length >= 1;
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
@@ -259,6 +262,7 @@ export function WalletBuilder() {
   );
 
   const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
+    setIsResultsOpen(false);
     setQuery("");
     setResults([]);
     setError(null);
@@ -299,6 +303,109 @@ export function WalletBuilder() {
     document.addEventListener("keydown", handleFocusShortcut);
     return () => document.removeEventListener("keydown", handleFocusShortcut);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (addToastTimerRef.current) {
+        window.clearTimeout(addToastTimerRef.current);
+        addToastTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const showAddedConfirmation = useCallback(() => {
+    setShowAddedToast(true);
+    if (addToastTimerRef.current) {
+      window.clearTimeout(addToastTimerRef.current);
+    }
+    addToastTimerRef.current = window.setTimeout(() => {
+      setShowAddedToast(false);
+      addToastTimerRef.current = null;
+    }, 2400);
+  }, []);
+
+  const addCardFromSearch = useCallback(
+    async (card: CardResult) => {
+      if (walletCardIds.has(card.id)) return;
+
+      setPendingActionError(null);
+
+      const optimisticInstanceId = `optimistic-${card.id}-${Date.now()}`;
+      setSelectedCards((prev) => {
+        if (prev.some((selected) => selected.cardId === card.id)) return prev;
+
+        return [
+          ...prev,
+          {
+            instanceId: optimisticInstanceId,
+            cardId: card.id,
+            product_key: card.product_key,
+            card_name: card.card_name,
+            display_name: card.display_name,
+            issuer: card.issuer,
+            network: card.network,
+            isPersisted: true,
+          } satisfies PersistedCardInstance,
+        ];
+      });
+
+      resetSearchUI({ focus: true });
+      showAddedConfirmation();
+
+      if (!userId) {
+        setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
+        setPendingActionError("Could not verify your account. Please try again.");
+        return;
+      }
+
+      const resolved = await resolveCanonicalCard({
+        instanceId: optimisticInstanceId,
+        cardId: card.id,
+        product_key: card.product_key,
+        card_name: card.card_name,
+        display_name: card.display_name,
+        issuer: card.issuer,
+        network: card.network,
+        isPersisted: false,
+      });
+
+      if (!resolved?.id) {
+        setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
+        setPendingActionError("Could not save this card right now. Please try again.");
+        return;
+      }
+
+      const canonicalCardId = resolved.id;
+      const { error: insertError } = await addCardToWallet(userId, canonicalCardId);
+      if (insertError) {
+        console.error("Failed to add card from search", insertError);
+        setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
+        setPendingActionError("Could not save this card right now. Please try again.");
+        return;
+      }
+
+      const { error: bootstrapError } = await supabase.rpc("bootstrap_user_benefits_for_card", {
+        p_user_id: userId,
+        p_card_id: canonicalCardId,
+      });
+
+      if (bootstrapError) {
+        console.error(`Failed to bootstrap benefits for card ${canonicalCardId}`, bootstrapError);
+      }
+
+      await loadExistingWalletCards({ keepPending: true });
+    },
+    [
+      addCardToWallet,
+      loadExistingWalletCards,
+      resolveCanonicalCard,
+      resetSearchUI,
+      showAddedConfirmation,
+      supabase,
+      userId,
+      walletCardIds,
+    ],
+  );
 
   useEffect(() => {
     if (!shouldShowResults) {
@@ -538,9 +645,7 @@ export function WalletBuilder() {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
       if (highlighted) {
-        if (walletCardIds.has(highlighted.id)) return;
-        addCard(highlighted);
-        resetSearchUI({ focus: true });
+        void addCardFromSearch(highlighted);
       }
     }
   };
@@ -827,8 +932,13 @@ export function WalletBuilder() {
                     type="text"
                     value={query}
                     onChange={(event) => {
-                      setQuery(event.target.value);
+                      const nextQuery = event.target.value;
+                      setQuery(nextQuery);
+                      setIsResultsOpen(nextQuery.trim().length >= 1);
                       setHighlightedIndex(0);
+                    }}
+                    onFocus={() => {
+                      if (query.trim().length >= 1) setIsResultsOpen(true);
                     }}
                     onKeyDown={handleResultsKeyDown}
                     placeholder="Search by credit card (e.g., Sapphire, Platinum)"
@@ -852,8 +962,7 @@ export function WalletBuilder() {
                     savedCardIds={savedCardIds}
                     pendingCardIds={pendingCardIds}
                     onAdd={(card) => {
-                      addCard(card);
-                      resetSearchUI({ focus: true });
+                      void addCardFromSearch(card);
                     }}
                     isLoading={showLoading}
                     error={error}
@@ -885,8 +994,7 @@ export function WalletBuilder() {
                         savedCardIds={savedCardIds}
                         pendingCardIds={pendingCardIds}
                         onAdd={(card) => {
-                          addCard(card);
-                          resetSearchUI({ focus: true });
+                          void addCardFromSearch(card);
                         }}
                         isLoading={showLoading}
                         error={error}
@@ -1189,6 +1297,13 @@ export function WalletBuilder() {
               </button>
             </div>
           </Surface>
+        </div>
+      ) : null}
+      {showAddedToast ? (
+        <div className="pointer-events-none fixed right-4 top-4 z-[120]">
+          <div className="rounded-lg border border-white/15 bg-[#121A28]/90 px-3 py-2 text-xs text-white/90 shadow-xl backdrop-blur-sm">
+            Added to wallet
+          </div>
         </div>
       ) : null}
       </MobilePageContainer>
