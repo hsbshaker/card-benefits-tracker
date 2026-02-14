@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
+import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -769,31 +770,32 @@ export function WalletBuilder() {
   };
 
   return (
-    <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="py-8 sm:py-10">
-      <div className="mb-6 min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 1 of 2 · Wallet Setup</p>
-        <div className="mt-2 flex items-start gap-3">
-          <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
-          <div>
-            <h1
-              className="text-3xl font-semibold tracking-tight text-white transition md:text-4xl motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
-            >
-              Build Your Lineup
-            </h1>
-            <p
-              className="mt-2 max-w-2xl text-sm leading-relaxed text-white/70 transition md:text-base motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
-            >
-              Add your cards to unlock personalized benefit tracking.
-            </p>
+    <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
+      <MobilePageContainer>
+        <div className="mb-6 min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 1 of 2 · Wallet Setup</p>
+          <div className="mt-2 flex items-start gap-3">
+            <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
+            <div>
+              <h1
+                className="text-3xl font-semibold tracking-tight text-white transition md:text-4xl motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+              >
+                Build Your Lineup
+              </h1>
+              <p
+                className="mt-2 max-w-2xl text-sm leading-relaxed text-white/70 transition md:text-base motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+              >
+                Add your cards to unlock personalized benefit tracking.
+              </p>
+            </div>
           </div>
+          <div
+            className="mx-auto mt-4 h-px w-3/4 bg-gradient-to-r from-transparent via-[#F7C948]/60 to-transparent blur-[0.5px]"
+            aria-hidden
+          />
         </div>
-        <div
-          className="mx-auto mt-4 h-px w-3/4 bg-gradient-to-r from-transparent via-[#F7C948]/60 to-transparent blur-[0.5px]"
-          aria-hidden
-        />
-      </div>
 
-      <div className="space-y-6 pb-32 md:pb-0">
+        <div className="space-y-6 pb-32 md:pb-0">
         <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Surface as="section" className="relative z-30 w-full min-w-0 overflow-visible p-4 sm:p-5">
             <div ref={searchAreaRef} className="min-w-0">
@@ -1133,9 +1135,9 @@ export function WalletBuilder() {
             Personalize Your Benefits →
           </Button>
         </div>
-      </div>
+        </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-6 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-4 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
         <div className="mx-auto w-full max-w-6xl">
           <Button
             type="button"
@@ -1177,7 +1179,7 @@ export function WalletBuilder() {
           </Surface>
         </div>
       ) : null}
-
+      </MobilePageContainer>
     </AppShell>
   );
 }

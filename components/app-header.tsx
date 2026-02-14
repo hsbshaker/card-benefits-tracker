@@ -23,9 +23,8 @@ const tabs: Tab[] = [
 export function AppHeader() {
   const pathname = usePathname();
   const [comingSoonTab, setComingSoonTab] = useState<TabId | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const navRef = useRef<HTMLElement | null>(null);
-  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const showNav = !pathname.startsWith("/onboarding/success");
 
@@ -36,6 +35,13 @@ export function AppHeader() {
     return null;
   }, [pathname]);
 
+  const mobilePageTitle = useMemo(() => {
+    if (activeTab === "wallet") return "Wallet Builder";
+    if (activeTab === "reminders") return "Personalize Reminders";
+    if (activeTab === "dashboard") return "Dashboard";
+    return "Memento";
+  }, [activeTab]);
+
   useEffect(() => {
     if (!comingSoonTab) return;
     const timeout = window.setTimeout(() => setComingSoonTab(null), 1500);
@@ -43,28 +49,22 @@ export function AppHeader() {
   }, [comingSoonTab]);
 
   useEffect(() => {
-    if (!mobileMenuOpen) return;
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (!mobileMenuRef.current) return;
-      if (event.target instanceof Node && !mobileMenuRef.current.contains(event.target)) {
-        setMobileMenuOpen(false);
-      }
-    };
+    if (!mobileDrawerOpen) return;
 
     const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
-        setMobileMenuOpen(false);
+        setMobileDrawerOpen(false);
       }
     };
 
-    document.addEventListener("mousedown", handleOutsideClick);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
       document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = previousOverflow;
     };
-  }, [mobileMenuOpen]);
+  }, [mobileDrawerOpen]);
 
   useEffect(() => {
     if (!comingSoonTab) return;
@@ -97,8 +97,96 @@ export function AppHeader() {
   };
 
   return (
-    <header className="relative z-30 h-16 bg-transparent">
-      <div className="relative mx-auto flex h-16 w-full min-w-0 max-w-6xl items-center justify-between gap-4 bg-transparent px-6">
+    <header className="relative z-40 bg-transparent">
+      <div className="md:hidden">
+        <div className="flex h-14 w-full min-w-0 items-center gap-3 border-b border-white/10 bg-[#0B1220]/55 px-4 backdrop-blur-md">
+          {showNav ? (
+            <button
+              type="button"
+              aria-expanded={mobileDrawerOpen}
+              aria-controls="mobile-nav-drawer"
+              onClick={() => setMobileDrawerOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/90 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45"
+              aria-label="Open navigation menu"
+            >
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" strokeLinecap="round" />
+              </svg>
+            </button>
+          ) : (
+            <span className="h-9 w-9 shrink-0" aria-hidden />
+          )}
+          <p className="min-w-0 truncate text-sm font-semibold tracking-tight text-white/92">{mobilePageTitle}</p>
+        </div>
+
+        <div
+          className={cn(
+            "fixed inset-0 z-50 transition-opacity duration-200",
+            mobileDrawerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+          )}
+          aria-hidden={!mobileDrawerOpen}
+        >
+          <button
+            type="button"
+            aria-label="Close menu overlay"
+            className="absolute inset-0 bg-[#030712]/55 backdrop-blur-[1px]"
+            onClick={() => setMobileDrawerOpen(false)}
+          />
+          <aside
+            id="mobile-nav-drawer"
+            className={cn(
+              "absolute left-0 top-0 h-full w-[80%] max-w-xs border-r border-white/12 bg-[#0F1A2E]/95 p-4 shadow-2xl backdrop-blur-md transition-transform duration-200 ease-out",
+              mobileDrawerOpen ? "translate-x-0" : "-translate-x-full",
+            )}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <span className="text-lg font-semibold tracking-tight text-white/92">Memento</span>
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45"
+                aria-label="Close navigation menu"
+              >
+                ×
+              </button>
+            </div>
+            {showNav ? (
+              <nav aria-label="Mobile navigation" className="space-y-1">
+                {tabs.map((tab) => {
+                  const isActive = tab.id === activeTab;
+                  return (
+                    <div key={tab.id} className="space-y-1">
+                      <Link
+                        href={tab.href}
+                        onClick={(event) => {
+                          setMobileDrawerOpen(false);
+                          if (!tab.comingSoon) return;
+                          event.preventDefault();
+                          setComingSoonTab(tab.id);
+                        }}
+                        onKeyDown={(event) => handleComingSoonAction(tab, event)}
+                        className={cn(
+                          "block rounded-xl px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45",
+                          tab.comingSoon
+                            ? "cursor-not-allowed text-white/40"
+                            : isActive
+                              ? "bg-white/12 text-white"
+                              : "text-white/75 hover:bg-white/6 hover:text-white",
+                        )}
+                      >
+                        {tab.label}
+                      </Link>
+                      {comingSoonTab === tab.id ? <p className="px-3 text-xs text-[#F7C948]/90">Coming soon</p> : null}
+                    </div>
+                  );
+                })}
+              </nav>
+            ) : null}
+          </aside>
+        </div>
+      </div>
+
+      <div className="relative mx-auto hidden h-16 w-full min-w-0 max-w-6xl items-center justify-between gap-4 bg-transparent px-6 md:flex">
         <Link href="/" className="inline-flex items-center transition-colors hover:text-white">
           <span className="text-lg font-semibold tracking-tight text-white/92">Memento</span>
         </Link>
@@ -153,55 +241,6 @@ export function AppHeader() {
                   </div>
                 );
               })}
-            </div>
-
-            <div ref={mobileMenuRef} className="flex justify-end md:hidden">
-              <button
-                type="button"
-                aria-expanded={mobileMenuOpen}
-                aria-controls="mobile-nav-menu"
-                onClick={() => setMobileMenuOpen((prev) => !prev)}
-                className="inline-flex items-center rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/90 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45"
-              >
-                Menu
-              </button>
-
-              {mobileMenuOpen ? (
-                <div
-                  id="mobile-nav-menu"
-                  className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 rounded-lg border border-white/15 bg-[#0F1A2E]/95 p-2 shadow-lg backdrop-blur-sm"
-                >
-                  <div className="flex flex-col gap-1">
-                    {tabs.map((tab) => {
-                      const isActive = tab.id === activeTab;
-                      return (
-                        <Link
-                          key={tab.id}
-                          href={tab.href}
-                          onClick={(event) => {
-                            setMobileMenuOpen(false);
-                            if (tab.comingSoon) {
-                              event.preventDefault();
-                              setComingSoonTab(tab.id);
-                              return;
-                            }
-                          }}
-                          className={cn(
-                            "rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/45",
-                            tab.comingSoon
-                              ? "cursor-not-allowed text-white/40"
-                              : isActive
-                                ? "bg-white/10 text-white"
-                                : "text-white/70 hover:bg-white/5 hover:text-white",
-                          )}
-                        >
-                          {tab.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
             </div>
           </nav>
         ) : null}

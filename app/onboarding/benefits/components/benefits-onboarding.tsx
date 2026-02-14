@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
+import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -1004,26 +1005,31 @@ export function BenefitsOnboarding() {
 
   if (loading) {
     return (
-      <AppShell containerClassName="py-8 sm:py-10">
-        <Surface className="p-6 text-sm text-white/75">Loading your benefits setup…</Surface>
+      <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
+        <MobilePageContainer>
+          <Surface className="p-6 text-sm text-white/75">Loading your benefits setup…</Surface>
+        </MobilePageContainer>
       </AppShell>
     );
   }
 
   if (error) {
     return (
-      <AppShell containerClassName="py-8 sm:py-10">
-        <Surface className="space-y-4 p-6">
-          <p className="text-sm text-white/80">{error}</p>
-          <Button onClick={() => void loadWalletBenefits()}>Try again</Button>
-        </Surface>
+      <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
+        <MobilePageContainer>
+          <Surface className="space-y-4 p-6">
+            <p className="text-sm text-white/80">{error}</p>
+            <Button onClick={() => void loadWalletBenefits()}>Try again</Button>
+          </Surface>
+        </MobilePageContainer>
       </AppShell>
     );
   }
 
   return (
-    <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="py-8 sm:py-10">
-      <div className="w-full min-w-0">
+    <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
+      <MobilePageContainer>
+        <div className="w-full min-w-0">
         <div className="mb-6 min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
           <div className="mt-2 flex items-start gap-3">
@@ -1091,9 +1097,9 @@ export function BenefitsOnboarding() {
 
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
         </div>
-      </div>
+        </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-6 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-4 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
         <div className="mx-auto w-full max-w-6xl">
           <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting} className="w-full">
             {isCompleting ? "Saving..." : "Complete"}
@@ -1129,6 +1135,7 @@ export function BenefitsOnboarding() {
           </Surface>
         </div>
       ) : null}
+      </MobilePageContainer>
     </AppShell>
   );
 }
