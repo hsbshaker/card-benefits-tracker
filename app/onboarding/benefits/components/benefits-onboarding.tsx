@@ -1283,34 +1283,29 @@ export function BenefitsOnboarding() {
       ) : null}
 
       {removeTargetCard ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4 backdrop-blur-sm"
-          onClick={handleCancelRemove}
-        >
-          <Surface className="w-full max-w-md rounded-xl p-5 transition duration-200 ease-out motion-safe:starting:scale-[0.98] motion-safe:starting:opacity-0" onClick={(event) => event.stopPropagation()}>
-            <div ref={removeModalRef} className="space-y-4">
-              <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-white">Remove this card?</h2>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4">
+          <Surface className="w-full max-w-md space-y-4 p-5">
+            <div ref={removeModalRef} className="space-y-2">
+              <h2 className="text-lg font-semibold text-white">Remove card from wallet?</h2>
               <p className="text-sm text-white/70">
-                This will remove {getShortCardName(removeTargetCard.cardName, removeTargetCard.issuer).replace(/\s+Card$/i, "")} from your wallet and delete all associated reminder settings.
+                This will remove this card and its benefits from your wallet. You can add it again later.
               </p>
-              </div>
+            </div>
 
-              {removeCardError ? <p className="text-sm text-[#F4B4B4]">{removeCardError}</p> : null}
+            {removeCardError ? <p className="text-sm text-[#F4B4B4]">{removeCardError}</p> : null}
 
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="secondary" onClick={handleCancelRemove} disabled={isRemovingCard}>
-                  Cancel
-                </Button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-xl border border-red-500/45 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:border-red-400/20 disabled:bg-red-600/40 disabled:text-white/70"
-                  onClick={() => void handleConfirmRemove()}
-                  disabled={isRemovingCard}
-                >
-                  {isRemovingCard ? "Removing..." : "Remove Card"}
-                </button>
-              </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={handleCancelRemove} disabled={isRemovingCard}>
+                Cancel
+              </Button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-xl border border-[#E87979]/35 bg-[#B04646]/25 px-5 py-2.5 text-sm font-semibold text-[#F9D1D1] transition-colors hover:bg-[#B04646]/40 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/12 disabled:text-[#F9D1D1]/60"
+                onClick={() => void handleConfirmRemove()}
+                disabled={isRemovingCard}
+              >
+                {isRemovingCard ? "Removing..." : "Remove"}
+              </button>
             </div>
           </Surface>
         </div>

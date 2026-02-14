@@ -1056,7 +1056,7 @@ export function WalletBuilder() {
                 onClick={() => void handleConfirmRemove()}
                 disabled={isRemovingCard}
               >
-                {isRemovingCard ? "Removing..." : "Yes, Remove"}
+                {isRemovingCard ? "Removing..." : "Remove"}
               </button>
             </div>
           </Surface>
