@@ -156,7 +156,7 @@ export default function LandingPage() {
   const firstName = getFirstName(user);
 
   return (
-    <AppShell>
+    <AppShell className="overflow-x-hidden">
       <div aria-hidden className="h-9" />
       {shouldShowEnvBanner && envError ? (
         <div className="mb-3 rounded-lg border border-amber-400/40 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
@@ -164,13 +164,13 @@ export default function LandingPage() {
         </div>
       ) : null}
 
-      <section className="pt-12 md:pt-14">
-        <div className="max-w-3xl">
+      <section className="px-4 pt-10 md:px-0 md:pt-14">
+        <div className="min-w-0 max-w-[22rem] sm:max-w-md md:max-w-3xl">
           <motion.h1
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="text-5xl font-semibold tracking-tight md:text-6xl md:leading-tight"
+            className="text-4xl leading-[1.05] font-semibold tracking-tight sm:text-5xl lg:text-6xl md:leading-tight"
           >
             Stop leaving credit card benefits on the table.
           </motion.h1>
@@ -179,7 +179,7 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="mt-4 text-lg leading-relaxed text-white/70 md:text-xl"
+            className="mt-4 max-w-[26rem] text-base leading-7 text-white/70 md:text-xl md:leading-relaxed"
           >
             Track statement credits, free nights, airline fees, and renewal dates in one clean dashboard. We preload what
             you’re likely to have — you confirm what applies, and we keep you on track.
@@ -189,14 +189,14 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             variants={fadeUp}
-            className="mt-7 flex flex-col items-start gap-3"
+            className="mt-7 flex w-full flex-col gap-3 sm:flex-row sm:items-center"
           >
             {user === undefined ? (
-              <div aria-hidden className="h-[2.75rem] w-[13.5rem] opacity-0" />
+              <div aria-hidden className="h-12 w-full sm:w-[13.5rem] opacity-0" />
             ) : user ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <Link href="/onboarding/benefits">
-                  <Button size="md" className="group">
+              <div className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                <Link href="/onboarding/benefits" className="w-full sm:w-auto">
+                  <Button size="md" className="group h-12 w-full sm:w-auto">
                     Welcome back, {firstName}
                   </Button>
                 </Link>
@@ -205,13 +205,18 @@ export default function LandingPage() {
                   type="button"
                   onClick={() => void signOut()}
                   disabled={isSigningOut}
-                  className="w-fit text-sm text-white/70 underline-offset-4 transition hover:text-white/90 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220] disabled:cursor-not-allowed disabled:text-white/45"
+                  className="text-left text-sm text-white/70 underline-offset-4 transition hover:text-white/90 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220] disabled:cursor-not-allowed disabled:text-white/45"
                 >
                   Not you? Sign-Out
                 </button>
               </div>
             ) : (
-              <Button onClick={signInWithGoogle} disabled={isSigningIn} size="md" className="group shadow-[0_10px_35px_-18px_rgba(127,182,255,0.7)]">
+              <Button
+                onClick={signInWithGoogle}
+                disabled={isSigningIn}
+                size="md"
+                className="group h-12 w-full shadow-[0_10px_35px_-18px_rgba(127,182,255,0.7)] sm:w-auto"
+              >
                 <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4">
                   <path
                     fill="#4285F4"
