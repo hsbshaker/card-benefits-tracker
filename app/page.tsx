@@ -24,39 +24,64 @@ export default function LandingPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [envError, setEnvError] = useState<string | null>(null);
+  const shouldShowEnvBanner =
+    process.env.NODE_ENV !== "production" ||
+    (process.env.NEXT_PUBLIC_VERCEL_ENV != null && process.env.NEXT_PUBLIC_VERCEL_ENV !== "production");
 
   useEffect(() => {
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase) return;
-
     let isMounted = true;
+    let unsubscribe: (() => void) | null = null;
 
-    const loadUser = async () => {
+    const run = async () => {
+      let supabase;
+      try {
+        supabase = getBrowserSupabaseClient();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
+        if (!isMounted) return;
+        setEnvError(message);
+        setUser(null);
+        return;
+      }
+
+      if (!supabase || !isMounted) return;
+
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser();
 
       if (!isMounted) return;
       setUser(currentUser ?? null);
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!isMounted) return;
+        setUser(session?.user ?? null);
+      });
+
+      unsubscribe = () => subscription.unsubscribe();
     };
 
-    void loadUser();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) return;
-      setUser(session?.user ?? null);
-    });
+    void run();
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 
   async function signInWithGoogle() {
-    const supabase = getBrowserSupabaseClient();
+    let supabase;
+    try {
+      supabase = getBrowserSupabaseClient();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
+      setEnvError(message);
+      alert(message);
+      return;
+    }
+
     if (!supabase) return;
 
     setIsSigningIn(true);
@@ -78,7 +103,16 @@ export default function LandingPage() {
   }
 
   async function signOut() {
-    const supabase = getBrowserSupabaseClient();
+    let supabase;
+    try {
+      supabase = getBrowserSupabaseClient();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
+      setEnvError(message);
+      alert(message);
+      return;
+    }
+
     if (!supabase) return;
 
     if (isSigningOut) return;
@@ -117,6 +151,11 @@ export default function LandingPage() {
   return (
     <AppShell>
       <div aria-hidden className="h-9" />
+      {shouldShowEnvBanner && envError ? (
+        <div className="mb-3 rounded-lg border border-amber-400/40 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+          Env warning: {envError}
+        </div>
+      ) : null}
 
       <section className="pt-12 md:pt-14">
         <div className="max-w-3xl">
