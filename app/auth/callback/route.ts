@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
     console.error("Auth callback failed to exchange code for session", {
       message: error.message,
       code: error.code,
-      details: error.details,
       hint: error.hint,
     });
     return errorRedirect;
