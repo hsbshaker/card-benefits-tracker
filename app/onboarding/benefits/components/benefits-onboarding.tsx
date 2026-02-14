@@ -12,7 +12,6 @@ import {
   type ProfilerOnRenderCallback,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
@@ -101,9 +100,6 @@ const CURRENCY_NO_CENTS_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 });
-const VIRTUALIZATION_THRESHOLD = 24;
-const BENEFIT_ROW_HEIGHT = 56;
-const VIRTUAL_LIST_MAX_VISIBLE_ROWS = 8;
 
 function formatCadenceLabel(cadence: Cadence) {
   if (cadence === "semi_annual") return "Semi-Annually";
@@ -205,15 +201,33 @@ function BellToggleIcon({ className, active }: { className?: string; active: boo
   );
 }
 
-function TrashCanIcon({ className }: { className?: string }) {
+function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
-      <path d="M3.75 5.5h12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M7.25 5.5v-.75c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1v.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M6.75 7.5v7.25c0 .83.67 1.5 1.5 1.5h3.5c.83 0 1.5-.67 1.5-1.5V7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M8.75 9v5.25M11.25 9v5.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="m6 8 4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+function KebabIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
+      <circle cx="10" cy="4.5" r="1.5" />
+      <circle cx="10" cy="10" r="1.5" />
+      <circle cx="10" cy="15.5" r="1.5" />
+    </svg>
+  );
+}
+
+function getDescriptionPreview(description: string, maxChars = 80) {
+  const normalized = description.trim().replace(/\s+/g, " ");
+  if (normalized.length <= maxChars) return normalized;
+
+  const snippet = normalized.slice(0, maxChars);
+  const cutoff = snippet.lastIndexOf(" ");
+  const bounded = (cutoff > 0 ? snippet.slice(0, cutoff) : snippet).trim().replace(/[.,;:!?]+$/, "");
+  if (!bounded) return `${normalized.slice(0, maxChars).trim()}.`;
+  return `${bounded}.`;
 }
 
 type BenefitItemProps = {
@@ -225,21 +239,52 @@ type BenefitItemProps = {
 const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onToggleUsed }: BenefitItemProps) {
   const formattedAmount = useMemo(() => formatBenefitAmount(benefit.value_cents, benefit.cadence), [benefit.value_cents, benefit.cadence]);
   const descriptionText = benefit.description?.trim();
+  const previewText = useMemo(() => (descriptionText ? getDescriptionPreview(descriptionText) : null), [descriptionText]);
   const enrollmentUrl = useMemo(() => getEnrollmentUrl(benefit.display_name), [benefit.display_name]);
   const isEnrollmentBenefit = Boolean(enrollmentUrl);
   const remindMeDisabled = benefit.used;
   const isRowDimmed = isEnrollmentBenefit ? benefit.used : !benefit.remind_me;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const canExpand = Boolean(descriptionText);
+  const hasExtendedDescription = Boolean(descriptionText && previewText && descriptionText !== previewText);
+  const detailsRegionId = `benefit-details-${benefit.id}`;
+
+  const handleToggleExpand = useCallback(() => {
+    if (!canExpand) return;
+    setIsExpanded((prev) => !prev);
+  }, [canExpand]);
+
+  const handleCardKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!canExpand) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      setIsExpanded((prev) => !prev);
+    },
+    [canExpand],
+  );
 
   return (
     <li
       className={cn(
-        "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 transition-all sm:px-3.5 sm:py-2",
+        "rounded-xl border border-white/10 bg-white/[0.04] transition-all",
         isRowDimmed ? "opacity-70 saturate-50" : "opacity-100 saturate-100",
       )}
     >
-      <div className="flex min-h-10 flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium leading-5 text-white/95">
+      <div
+        role="button"
+        tabIndex={canExpand ? 0 : -1}
+        aria-expanded={canExpand ? isExpanded : undefined}
+        aria-controls={canExpand ? detailsRegionId : undefined}
+        onClick={handleToggleExpand}
+        onKeyDown={handleCardKeyDown}
+        className={cn(
+          "w-full rounded-xl px-3 py-2 text-left transition-colors sm:px-3.5",
+          canExpand ? "cursor-pointer hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]" : "",
+        )}
+      >
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-medium leading-5 text-white/95">
             <span>{benefit.display_name}</span>
             {formattedAmount ? (
               <span>
@@ -248,97 +293,96 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               </span>
             ) : null}
           </p>
-          {descriptionText ? <p className="truncate text-xs leading-4 text-white/60">{descriptionText}</p> : null}
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-              remindMeDisabled
-                ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
-                : benefit.remind_me
-                  ? "border-emerald-300/45 bg-emerald-400/20 text-emerald-100"
-                  : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/85",
-            )}
-            onClick={() => {
-              if (isEnrollmentBenefit && enrollmentUrl) {
-                window.open(enrollmentUrl, "_blank", "noopener,noreferrer");
-                return;
-              }
-              onToggleRemindMe(benefit, !benefit.remind_me);
-            }}
-            disabled={remindMeDisabled}
-            aria-label={isEnrollmentBenefit ? "Enroll Now" : benefit.remind_me ? "Remind Me On" : "Remind Me Off"}
-          >
-            {isEnrollmentBenefit ? "Enroll Now" : null}
-            {!isEnrollmentBenefit ? <BellToggleIcon className="h-3.5 w-3.5 shrink-0" active={benefit.remind_me} /> : null}
-          </button>
-
-          {isEnrollmentBenefit ? (
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-                benefit.used
-                  ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
-                  : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+                "inline-flex h-11 w-11 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                remindMeDisabled
+                  ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                  : benefit.remind_me
+                    ? "border-emerald-300/45 bg-emerald-400/20 text-emerald-100"
+                    : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/85",
               )}
-              onClick={() => onToggleUsed(benefit, !benefit.used)}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isEnrollmentBenefit && enrollmentUrl) {
+                  window.open(enrollmentUrl, "_blank", "noopener,noreferrer");
+                  return;
+                }
+                onToggleRemindMe(benefit, !benefit.remind_me);
+              }}
+              disabled={remindMeDisabled}
+              aria-label={
+                isEnrollmentBenefit
+                  ? `Enroll for ${benefit.display_name}`
+                  : `Toggle reminder for ${benefit.display_name}`
+              }
             >
-              Already Enrolled
-              {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+              {!isEnrollmentBenefit ? <BellToggleIcon className="h-4 w-4 shrink-0" active={benefit.remind_me} /> : "Go"}
             </button>
+
+            {canExpand ? (
+              <button
+                type="button"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleToggleExpand();
+                }}
+                aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
+                aria-expanded={isExpanded}
+                aria-controls={detailsRegionId}
+              >
+                <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {previewText ? (
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className="min-w-0 text-xs leading-4 text-white/65">{previewText}</p>
+            {hasExtendedDescription && !isExpanded ? <span className="shrink-0 text-[10px] text-white/45">Tap for details</span> : null}
+          </div>
+        ) : null}
+
+        <div
+          id={detailsRegionId}
+          className={cn(
+            "overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out",
+            isExpanded && descriptionText ? "mt-2 max-h-[240px] opacity-100 translate-y-0" : "max-h-0 opacity-0 -translate-y-1",
+          )}
+          aria-hidden={!isExpanded}
+        >
+          {descriptionText ? (
+            <div className="space-y-2 border-t border-white/10 pt-2">
+              <p className="text-xs leading-relaxed text-white/70">{descriptionText}</p>
+            </div>
           ) : null}
         </div>
+
+        {isEnrollmentBenefit ? (
+          <button
+            type="button"
+            className={cn(
+              "mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+              benefit.used
+                ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
+                : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleUsed(benefit, !benefit.used);
+            }}
+          >
+            Already Enrolled
+            {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+          </button>
+        ) : null}
       </div>
     </li>
-  );
-});
-
-type VirtualizedBenefitsListProps = {
-  benefits: BenefitRow[];
-  onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
-  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
-};
-
-const VirtualizedBenefitsList = memo(function VirtualizedBenefitsList({
-  benefits,
-  onToggleRemindMe,
-  onToggleUsed,
-}: VirtualizedBenefitsListProps) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const viewportHeight = Math.min(benefits.length, VIRTUAL_LIST_MAX_VISIBLE_ROWS) * BENEFIT_ROW_HEIGHT;
-  const rowVirtualizer = useVirtualizer({
-    count: benefits.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => BENEFIT_ROW_HEIGHT,
-    overscan: 4,
-    getItemKey: (index) => benefits[index]?.id ?? index,
-  });
-
-  return (
-    <div ref={parentRef} className="overflow-y-auto pr-1" style={{ height: viewportHeight }}>
-      <ul className="relative" style={{ height: rowVirtualizer.getTotalSize() }}>
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const benefit = benefits[virtualRow.index];
-          if (!benefit) return null;
-          return (
-            <li
-              key={benefit.id}
-              className="absolute left-0 right-0"
-              style={{
-                transform: `translateY(${virtualRow.start}px)`,
-                height: BENEFIT_ROW_HEIGHT,
-              }}
-            >
-              <BenefitItem benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 });
 
@@ -389,6 +433,33 @@ const CardPanel = memo(function CardPanel({
     () => card.benefits.filter((benefit) => benefit.cadence === activeCadence),
     [card.benefits, activeCadence],
   );
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current) return;
+      const targetNode = event.target as Node;
+      if (!menuRef.current.contains(targetNode)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isMenuOpen]);
 
   if (isRemoved) {
     return (
@@ -400,35 +471,66 @@ const CardPanel = memo(function CardPanel({
 
   return (
     <Surface key={card.cardId} className="overflow-hidden p-0 backdrop-blur-0 [content-visibility:auto] [contain-intrinsic-size:80px]">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/5"
-        onClick={() => onToggleExpand(card.cardId)}
-      >
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
-          <p className="text-xs text-white/55">
-            {card.issuer}
-            {card.network ? ` • ${card.network}` : ""}
-          </p>
+      <div className="relative">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={isExpanded}
+          onClick={() => onToggleExpand(card.cardId)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onToggleExpand(card.cardId);
+          }}
+          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
+        >
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
+            <p className="text-xs text-white/55">
+              {card.issuer}
+              {card.network ? ` • ${card.network}` : ""}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
+            <button
+              type="button"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsMenuOpen((prev) => !prev);
+              }}
+              aria-label={`Open actions for ${card.cardName}`}
+              aria-expanded={isMenuOpen}
+            >
+              <KebabIcon className="h-4 w-4" />
+            </button>
+            <span className="text-sm text-white/65">{isExpanded ? "−" : "+"}</span>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
-            onClick={(event) => {
-              event.stopPropagation();
-              onRequestRemove(card);
-            }}
-            aria-label="Remove From Wallet"
-          >
-            <TrashCanIcon className="h-4 w-4" />
-            <span className="sr-only">Remove From Wallet</span>
-          </button>
-          <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
-          <span className="text-sm text-white/65">{isExpanded ? "−" : "+"}</span>
-        </div>
-      </button>
+
+        {isMenuOpen ? (
+          <div ref={menuRef} className="absolute right-5 top-14 z-20 min-w-[210px] rounded-xl border border-white/15 bg-[#0F172A] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-[#F8C1C1] transition hover:bg-[#B04646]/30"
+              onClick={() => {
+                setIsMenuOpen(false);
+                onRequestRemove(card);
+              }}
+            >
+              Remove card from wallet
+            </button>
+            <button
+              type="button"
+              className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-white/75 transition hover:bg-white/10 hover:text-white/90"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {isExpanded ? (
         <div className="space-y-4 border-t border-white/10 px-5 py-4">
@@ -474,13 +576,6 @@ const CardPanel = memo(function CardPanel({
 
             {activeCadenceBenefits.length === 0 ? (
               <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">No benefits in this cadence.</p>
-            ) : activeCadenceBenefits.length >= VIRTUALIZATION_THRESHOLD ? (
-              <VirtualizedBenefitsList
-                key={`${card.cardId}-${activeCadence}`}
-                benefits={activeCadenceBenefits}
-                onToggleRemindMe={onToggleRemindMe}
-                onToggleUsed={onToggleUsed}
-              />
             ) : (
               <ul className="space-y-1.5">
                 {activeCadenceBenefits.map((benefit) => (
@@ -1137,7 +1232,7 @@ export function BenefitsOnboarding() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4">
           <Surface className="w-full max-w-md space-y-4 p-5">
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-white">Remove card from wallet?</h2>
+              <h2 className="text-lg font-semibold text-white">Remove {removeTargetCard.cardName} from your wallet?</h2>
               <p className="text-sm text-white/70">
                 This will remove this card and its benefits from your wallet. You can add it again later.
               </p>
