@@ -38,7 +38,8 @@ type WalletCard = {
 };
 
 type WalletCardRow = {
-  cards: WalletCard[] | null;
+  card_id: string;
+  cards: WalletCard | null;
 };
 
 const ISSUER_OPTIONS: IssuerOption[] = [
@@ -69,6 +70,8 @@ export function WalletBuilder() {
   const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isWalletLoading, setIsWalletLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isAuthResolved, setIsAuthResolved] = useState(false);
   const [removeTargetCard, setRemoveTargetCard] = useState<SelectedCardInstance | null>(null);
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
@@ -140,27 +143,46 @@ export function WalletBuilder() {
     addCardInstance(card);
   };
 
-  const loadExistingWalletCards = useCallback(
-    async ({ keepPending = true }: { keepPending?: boolean } = {}) => {
-      setIsWalletLoading(true);
+  useEffect(() => {
+    let isMounted = true;
 
+    const resolveUser = async () => {
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
-      if (userError || !user) {
-        if (userError) {
-          console.error("Failed to load authenticated user", userError);
-        }
+      if (!isMounted) return;
+
+      if (userError) {
+        console.error("Failed to load authenticated user", userError);
+      }
+
+      setUserId(user?.id ?? null);
+      setIsAuthResolved(true);
+    };
+
+    void resolveUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
+
+  const loadExistingWalletCards = useCallback(
+    async ({ keepPending = true }: { keepPending?: boolean } = {}) => {
+      if (!userId) {
+        setSelectedCards((prev) => prev.filter((card) => !card.isPersisted));
         setIsWalletLoading(false);
         return;
       }
 
+      setIsWalletLoading(true);
+
       const { data, error: walletError } = await supabase
         .from("user_cards")
-        .select("cards(id, product_key, card_name, display_name, issuer, network)")
-        .eq("user_id", user.id);
+        .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
+        .eq("user_id", userId);
 
       if (walletError) {
         console.error("Failed to load wallet cards", walletError);
@@ -170,18 +192,15 @@ export function WalletBuilder() {
 
       const walletRows: WalletCardRow[] = data ?? [];
 
-      const walletCards: WalletCard[] = walletRows.flatMap((row) => {
-        const cards = row.cards;
-        if (!Array.isArray(cards)) return [];
-
-        return cards.filter(
+      const walletCards: WalletCard[] = walletRows
+        .map((row) => row.cards)
+        .filter(
           (card): card is WalletCard =>
             Boolean(card) &&
             typeof card.id === "string" &&
             typeof card.card_name === "string" &&
             typeof card.issuer === "string",
         );
-      });
 
       setSelectedCards((prev) => {
         const nextPendingCards = keepPending ? prev.filter((card) => !card.isPersisted) : [];
@@ -206,7 +225,7 @@ export function WalletBuilder() {
 
       setIsWalletLoading(false);
     },
-    [supabase],
+    [supabase, userId],
   );
 
   const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
@@ -235,8 +254,9 @@ export function WalletBuilder() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthResolved) return;
     void loadExistingWalletCards();
-  }, [loadExistingWalletCards]);
+  }, [isAuthResolved, loadExistingWalletCards]);
 
   useEffect(() => {
     const handleFocusShortcut = (event: globalThis.KeyboardEvent) => {
@@ -572,12 +592,7 @@ export function WalletBuilder() {
     setIsRemovingCard(true);
     setRemoveCardError(null);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    if (!userId) {
       setRemoveCardError("Could not verify your account. Please try again.");
       setIsRemovingCard(false);
       return;
@@ -586,7 +601,7 @@ export function WalletBuilder() {
     const { error: deleteError } = await supabase
       .from("user_cards")
       .delete()
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("card_id", removeTargetCard.cardId);
 
     if (deleteError) {
@@ -597,10 +612,11 @@ export function WalletBuilder() {
     }
 
     setSelectedCards((prev) => prev.filter((card) => card.cardId !== removeTargetCard.cardId));
+    await loadExistingWalletCards({ keepPending: false });
     setRemoveTargetCard(null);
     setRemoveCardError(null);
     setIsRemovingCard(false);
-  }, [isRemovingCard, removeTargetCard, supabase]);
+  }, [isRemovingCard, loadExistingWalletCards, removeTargetCard, supabase, userId]);
 
   const handleContinue = async () => {
     if (pendingCards.length === 0 || isSaving) return;
@@ -613,18 +629,20 @@ export function WalletBuilder() {
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 160));
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        if (userError) console.error("Failed to load authenticated user", userError);
+      if (!userId) {
         setPendingActionError("Could not verify your account. Please try again.");
         return;
       }
 
       const resolvedCards = await Promise.all(pendingCards.map((card) => resolveCanonicalCard(card)));
+      const resolvedCardSourceById = new Map<string, SelectedCardInstance>();
+      for (let index = 0; index < resolvedCards.length; index += 1) {
+        const resolved = resolvedCards[index];
+        const source = pendingCards[index];
+        if (resolved?.id && source && !resolvedCardSourceById.has(resolved.id)) {
+          resolvedCardSourceById.set(resolved.id, source);
+        }
+      }
       const uniqueCardIds = Array.from(
         new Set(
           resolvedCards
@@ -640,7 +658,7 @@ export function WalletBuilder() {
       const { data: existingRows, error: existingError } = await supabase
         .from("user_cards")
         .select("card_id")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .in("card_id", uniqueCardIds);
 
       if (existingError) {
@@ -654,19 +672,61 @@ export function WalletBuilder() {
 
       if (newCardIds.length > 0) {
         for (const cardId of newCardIds) {
-          const { error: insertError } = await addCardToWallet(user.id, cardId);
+          const { error: insertError } = await addCardToWallet(userId, cardId);
           if (insertError) {
             console.error("Failed to save selected cards", insertError);
             setPendingActionError("Could not save cards right now. Please try again.");
             return;
           }
         }
+
+        setSelectedCards((prev) => {
+          let next = [...prev];
+          const walletCardsToAppend = newCardIds
+            .map((cardId) => {
+              const sourceCard = resolvedCardSourceById.get(cardId) ?? pendingCards.find((card) => card.cardId === cardId);
+
+              if (!sourceCard) return null;
+
+              return {
+                instanceId: `persisted-${cardId}`,
+                cardId,
+                product_key: sourceCard.product_key,
+                card_name: sourceCard.card_name,
+                display_name: sourceCard.display_name,
+                issuer: sourceCard.issuer,
+                network: sourceCard.network,
+                isPersisted: true,
+              } satisfies SelectedCardInstance;
+            })
+            .filter((card): card is SelectedCardInstance => Boolean(card));
+
+          for (const walletCard of walletCardsToAppend) {
+            const alreadyPersisted = next.some((card) => card.isPersisted && card.cardId === walletCard.cardId);
+            if (alreadyPersisted) continue;
+
+            next = next.filter(
+              (card) =>
+                card.isPersisted ||
+                (card.cardId !== walletCard.cardId &&
+                  !(walletCard.product_key && card.product_key && card.product_key === walletCard.product_key)),
+            );
+            next.push(walletCard);
+          }
+
+          if (process.env.NODE_ENV !== "production") {
+            const walletCards = next.filter((card) => card.isPersisted);
+            console.log("Added card to DB, now wallet count:", walletCards.length);
+          }
+
+          return next;
+        });
       }
 
       let bootstrapFailures = 0;
       for (const cardId of newCardIds) {
         const { error: bootstrapError } = await supabase.rpc("bootstrap_user_benefits_for_card", {
-          p_user_id: user.id,
+          p_user_id: userId,
           p_card_id: cardId,
         });
 
