@@ -252,6 +252,15 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
     [canExpand],
   );
 
+  const handleOpenEnrollment = useCallback(
+    (event?: { stopPropagation?: () => void }) => {
+      event?.stopPropagation?.();
+      if (!enrollmentUrl) return;
+      window.open(enrollmentUrl, "_blank", "noopener,noreferrer");
+    },
+    [enrollmentUrl],
+  );
+
   return (
     <li
       className={cn(
@@ -267,76 +276,113 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
         onClick={handleToggleExpand}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "w-full pl-3 pr-1.5 py-2.5 text-left transition-colors",
+          "w-full pl-3 pr-2 py-3 text-left transition-colors",
           canExpand ? "cursor-pointer hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset" : "",
         )}
       >
-        <div className="grid grid-cols-[1fr_auto] items-start gap-2">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-1">
-              <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
-              {canExpand ? (
-                <button
-                  type="button"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleToggleExpand();
-                  }}
-                  aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
-                  aria-expanded={isExpanded}
-                  aria-controls={detailsRegionId}
-                >
-                  <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
-                </button>
-              ) : null}
-            </div>
-
-            {formattedAmount ? (
-              <div className="mt-2 flex items-center">
+        {isEnrollmentBenefit ? (
+          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+            <div className="min-w-0 flex flex-col gap-2">
+              <p className="min-w-0 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+              {formattedAmount ? (
                 <span
                   className={cn(
-                    "inline-flex shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
+                    "inline-flex w-fit shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
                     BENEFIT_AMOUNT_ACCENT_CLASS,
                   )}
                 >
                   {formattedAmount}
                 </span>
+              ) : null}
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                  benefit.used
+                    ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
+                    : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
+                )}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleUsed(benefit, !benefit.used);
+                }}
+              >
+                Already Enrolled
+                {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+              </button>
+            </div>
+
+            {benefit.used ? (
+              <span className="inline-flex h-10 shrink-0 items-center rounded-lg border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white/45">
+                Enrolled
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-[#86EFAC]/35 bg-emerald-400/12 px-4 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                onClick={handleOpenEnrollment}
+              >
+                Enroll Now
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-[1fr_auto] items-start gap-2">
+            <div className="min-w-0 flex flex-col gap-2">
+              <div className="flex min-w-0 items-center gap-1">
+                <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+                {canExpand ? (
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleToggleExpand();
+                    }}
+                    aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
+                    aria-expanded={isExpanded}
+                    aria-controls={detailsRegionId}
+                  >
+                    <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
+                  </button>
+                ) : null}
               </div>
-            ) : null}
 
-          </div>
+              {formattedAmount ? (
+                <span
+                  className={cn(
+                    "inline-flex w-fit shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
+                    BENEFIT_AMOUNT_ACCENT_CLASS,
+                  )}
+                >
+                  {formattedAmount}
+                </span>
+              ) : null}
+            </div>
 
-          <div className="mt-0.5 flex shrink-0 items-start">
-            <button
-              type="button"
-              className={cn(
-                "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-                remindMeDisabled
-                  ? "cursor-not-allowed border-white/10 bg-white/[0.03] text-white/35"
-                  : benefit.remind_me
-                    ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
-                    : "border-white/12 bg-white/[0.03] text-white/60 hover:bg-white/[0.08] hover:text-white/85",
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (isEnrollmentBenefit && enrollmentUrl) {
-                  window.open(enrollmentUrl, "_blank", "noopener,noreferrer");
-                  return;
-                }
-                onToggleRemindMe(benefit, !benefit.remind_me);
-              }}
-              disabled={remindMeDisabled}
-              aria-label={
-                isEnrollmentBenefit
-                  ? `Enroll for ${benefit.display_name}`
-                  : `Toggle reminder for ${benefit.display_name}`
-              }
-            >
-              {!isEnrollmentBenefit ? <BellToggleIcon className="h-[18px] w-[18px] shrink-0" active={benefit.remind_me} /> : "Go"}
-            </button>
+            <div className="flex shrink-0 items-start">
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                  remindMeDisabled
+                    ? "cursor-not-allowed border-white/10 bg-white/[0.03] text-white/35"
+                    : benefit.remind_me
+                      ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
+                      : "border-white/12 bg-white/[0.03] text-white/60 hover:bg-white/[0.08] hover:text-white/85",
+                )}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleRemindMe(benefit, !benefit.remind_me);
+                }}
+                disabled={remindMeDisabled}
+                aria-label={`Toggle reminder for ${benefit.display_name}`}
+              >
+                <BellToggleIcon className="h-[18px] w-[18px] shrink-0" active={benefit.remind_me} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div
           id={detailsRegionId}
@@ -353,24 +399,6 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           ) : null}
         </div>
 
-        {isEnrollmentBenefit ? (
-          <button
-            type="button"
-            className={cn(
-              "mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-              benefit.used
-                ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
-                : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
-            )}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleUsed(benefit, !benefit.used);
-            }}
-          >
-            Already Enrolled
-            {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
-          </button>
-        ) : null}
       </div>
     </li>
   );
