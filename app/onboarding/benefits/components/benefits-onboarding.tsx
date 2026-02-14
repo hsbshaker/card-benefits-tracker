@@ -11,7 +11,6 @@ import {
   type KeyboardEvent,
   type ProfilerOnRenderCallback,
 } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -224,12 +223,13 @@ function ChevronIcon({ className }: { className?: string }) {
   );
 }
 
-function KebabIcon({ className }: { className?: string }) {
+function TrashIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
-      <circle cx="10" cy="4.5" r="1.5" />
-      <circle cx="10" cy="10" r="1.5" />
-      <circle cx="10" cy="15.5" r="1.5" />
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M4.5 6h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M7.5 6V4.9c0-.5.4-.9.9-.9h3.2c.5 0 .9.4.9.9V6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M6.5 8.5v6.1c0 .8.6 1.4 1.4 1.4h4.2c.8 0 1.4-.6 1.4-1.4V8.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M9 9.5v5M11 9.5v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -474,43 +474,6 @@ const CardPanel = memo(function CardPanel({
     () => card.benefits.filter((benefit) => benefit.cadence === activeCadence),
     [card.benefits, activeCadence],
   );
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const kebabButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
-
-  const updateMenuPosition = useCallback(() => {
-    const trigger = kebabButtonRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const menuWidth = 210;
-    const viewportPadding = 12;
-    const nextLeft = Math.min(
-      Math.max(viewportPadding, rect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportPadding,
-    );
-    setMenuPosition({ top: rect.bottom + 6, left: nextLeft });
-  }, []);
-
-  useEffect(() => {
-    if (!isMenuOpen) return;
-    updateMenuPosition();
-
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsMenuOpen(false);
-      }
-    };
-    const onViewportChange = () => updateMenuPosition();
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", onViewportChange);
-    window.addEventListener("scroll", onViewportChange, true);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", onViewportChange);
-      window.removeEventListener("scroll", onViewportChange, true);
-    };
-  }, [isMenuOpen, updateMenuPosition]);
 
   if (isRemoved) {
     return (
@@ -542,22 +505,14 @@ const CardPanel = memo(function CardPanel({
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              ref={kebabButtonRef}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-red-400 transition hover:bg-red-500/10 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
               onClick={(event) => {
                 event.stopPropagation();
-                setIsMenuOpen((prev) => {
-                  const next = !prev;
-                  if (next) {
-                    requestAnimationFrame(() => updateMenuPosition());
-                  }
-                  return next;
-                });
+                onRequestRemove(card);
               }}
-              aria-label={`${isMenuOpen ? "Close" : "Open"} actions for ${card.cardName}`}
-              aria-expanded={isMenuOpen}
+              aria-label={`Remove ${card.cardName}`}
             >
-              <KebabIcon className="h-4 w-4" />
+              <TrashIcon className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -573,42 +528,6 @@ const CardPanel = memo(function CardPanel({
             </button>
           </div>
         </div>
-
-        {isMenuOpen && menuPosition
-          ? createPortal(
-              <>
-                <button
-                  type="button"
-                  aria-label="Close card actions"
-                  className="fixed inset-0 z-[90] cursor-default bg-transparent"
-                  onClick={() => setIsMenuOpen(false)}
-                />
-                <div
-                  className="fixed z-[100] min-w-[210px] rounded-xl border border-white/15 bg-[#0F172A] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
-                  style={{ top: menuPosition.top, left: menuPosition.left }}
-                >
-                  <button
-                    type="button"
-                    className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-[#F8C1C1] transition hover:bg-[#B04646]/30"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      onRequestRemove(card);
-                    }}
-                  >
-                    Remove
-                  </button>
-                  <button
-                    type="button"
-                    className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-white/75 transition hover:bg-white/10 hover:text-white/90"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>,
-              document.body,
-            )
-          : null}
       </div>
 
       {isExpanded ? (
@@ -683,10 +602,12 @@ export function BenefitsOnboarding() {
   const [userId, setUserId] = useState<string | null>(null);
   const [removeTargetCard, setRemoveTargetCard] = useState<CardGroup | null>(null);
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
+  const [removeToast, setRemoveToast] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
-  const removeNoticeTimersRef = useRef<Record<string, number>>({});
+  const removeToastTimerRef = useRef<number | null>(null);
+  const removeModalRef = useRef<HTMLDivElement | null>(null);
 
   const profileOnRender = useCallback<ProfilerOnRenderCallback>((id, phase, actualDuration) => {
     if (process.env.NODE_ENV === "production") return;
@@ -697,8 +618,10 @@ export function BenefitsOnboarding() {
 
   useEffect(() => {
     return () => {
-      Object.values(removeNoticeTimersRef.current).forEach((timer) => window.clearTimeout(timer));
-      removeNoticeTimersRef.current = {};
+      if (removeToastTimerRef.current != null) {
+        window.clearTimeout(removeToastTimerRef.current);
+        removeToastTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -1084,11 +1007,81 @@ export function BenefitsOnboarding() {
     setRemoveCardError(null);
   }, [isRemovingCard]);
 
+  const showRemoveToast = useCallback((message: string) => {
+    setRemoveToast(message);
+    if (removeToastTimerRef.current != null) {
+      window.clearTimeout(removeToastTimerRef.current);
+    }
+    removeToastTimerRef.current = window.setTimeout(() => {
+      setRemoveToast(null);
+      removeToastTimerRef.current = null;
+    }, 3200);
+  }, []);
+
+  useEffect(() => {
+    if (!removeTargetCard) return;
+    const modalNode = removeModalRef.current;
+    if (!modalNode) return;
+
+    const focusable = Array.from(
+      modalNode.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+    ).filter((node) => !node.hasAttribute("disabled"));
+    const firstFocusable = focusable[0];
+    firstFocusable?.focus();
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!isRemovingCard) {
+          handleCancelRemove();
+        }
+        return;
+      }
+      if (event.key !== "Tab") return;
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [handleCancelRemove, isRemovingCard, removeTargetCard]);
+
   const handleConfirmRemove = useCallback(async () => {
     if (!removeTargetCard || isRemovingCard) return;
 
     setIsRemovingCard(true);
     setRemoveCardError(null);
+    const removedCardId = removeTargetCard.cardId;
+    const previousCards = cards;
+    const previousExpandedCardId = expandedCardId;
+    const previousActiveCadenceByCardId = activeCadenceByCardId;
+
+    const rollback = () => {
+      setCards(previousCards);
+      setExpandedCardId(previousExpandedCardId);
+      setActiveCadenceByCardId(previousActiveCadenceByCardId);
+    };
+
+    // Optimistic removal from UI
+    setCards((prev) => prev.filter((card) => card.cardId !== removedCardId));
+    setExpandedCardId((prev) => (prev === removedCardId ? null : prev));
+    setActiveCadenceByCardId((prev) => {
+      if (!(removedCardId in prev)) return prev;
+      const next = { ...prev };
+      delete next[removedCardId];
+      return next;
+    });
+    setRemoveTargetCard(null);
 
     const {
       data: { user },
@@ -1096,7 +1089,9 @@ export function BenefitsOnboarding() {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      rollback();
       setRemoveCardError("Could not verify your account. Please try again.");
+      showRemoveToast("Failed to remove card. Try again.");
       setIsRemovingCard(false);
       return;
     }
@@ -1109,37 +1104,16 @@ export function BenefitsOnboarding() {
 
     if (deleteError) {
       console.error("Failed to remove card from wallet", describeSupabaseError(deleteError));
+      rollback();
       setRemoveCardError("Could not remove this card right now. Please try again.");
+      showRemoveToast("Failed to remove card. Try again.");
       setIsRemovingCard(false);
       return;
     }
 
-    const removedCardId = removeTargetCard.cardId;
-    setRemovedCardIds((prev) => (prev.includes(removedCardId) ? prev : [...prev, removedCardId]));
-    setRemovedCardNamesById((prev) => ({ ...prev, [removedCardId]: removeTargetCard.cardName }));
-    setExpandedCardId((prev) => (prev === removedCardId ? null : prev));
-    setActiveCadenceByCardId((prev) => {
-      if (!(removedCardId in prev)) return prev;
-      const next = { ...prev };
-      delete next[removedCardId];
-      return next;
-    });
-    setRemoveTargetCard(null);
     setRemoveCardError(null);
     setIsRemovingCard(false);
-
-    removeNoticeTimersRef.current[removedCardId] = window.setTimeout(() => {
-      setCards((prev) => prev.filter((card) => card.cardId !== removedCardId));
-      setRemovedCardIds((prev) => prev.filter((cardId) => cardId !== removedCardId));
-      setRemovedCardNamesById((prev) => {
-        if (!(removedCardId in prev)) return prev;
-        const next = { ...prev };
-        delete next[removedCardId];
-        return next;
-      });
-      delete removeNoticeTimersRef.current[removedCardId];
-    }, 1500);
-  }, [isRemovingCard, removeTargetCard, supabase]);
+  }, [activeCadenceByCardId, cards, expandedCardId, isRemovingCard, removeTargetCard, showRemoveToast, supabase]);
 
   const handleComplete = useCallback(async () => {
     if (isCompleting || !hasActiveCards) return;
@@ -1302,30 +1276,41 @@ export function BenefitsOnboarding() {
         </div>
       </div>
 
+      {removeToast ? (
+        <div className="pointer-events-none fixed left-1/2 top-4 z-[80] -translate-x-1/2 rounded-lg border border-white/15 bg-[#0F172A]/90 px-3 py-2 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          {removeToast}
+        </div>
+      ) : null}
+
       {removeTargetCard ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4">
-          <Surface className="w-full max-w-md space-y-4 p-5">
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-white">Remove {removeTargetCard.cardName} from your wallet?</h2>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030712]/70 px-4 backdrop-blur-sm"
+          onClick={handleCancelRemove}
+        >
+          <Surface className="w-full max-w-md rounded-xl p-5 transition duration-200 ease-out motion-safe:starting:scale-[0.98] motion-safe:starting:opacity-0" onClick={(event) => event.stopPropagation()}>
+            <div ref={removeModalRef} className="space-y-4">
+              <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-white">Remove this card?</h2>
               <p className="text-sm text-white/70">
-                This will remove this card and its benefits from your wallet. You can add it again later.
+                This will remove {getShortCardName(removeTargetCard.cardName, removeTargetCard.issuer).replace(/\s+Card$/i, "")} from your wallet and delete all associated reminder settings.
               </p>
-            </div>
+              </div>
 
-            {removeCardError ? <p className="text-sm text-[#F4B4B4]">{removeCardError}</p> : null}
+              {removeCardError ? <p className="text-sm text-[#F4B4B4]">{removeCardError}</p> : null}
 
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={handleCancelRemove} disabled={isRemovingCard}>
-                Cancel
-              </Button>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-xl border border-[#E87979]/35 bg-[#B04646]/25 px-5 py-2.5 text-sm font-semibold text-[#F9D1D1] transition-colors hover:bg-[#B04646]/40 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/12 disabled:text-[#F9D1D1]/60"
-                onClick={() => void handleConfirmRemove()}
-                disabled={isRemovingCard}
-              >
-                {isRemovingCard ? "Removing..." : "Yes, Remove"}
-              </button>
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="secondary" onClick={handleCancelRemove} disabled={isRemovingCard}>
+                  Cancel
+                </Button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-xl border border-red-500/45 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:border-red-400/20 disabled:bg-red-600/40 disabled:text-white/70"
+                  onClick={() => void handleConfirmRemove()}
+                  disabled={isRemovingCard}
+                >
+                  {isRemovingCard ? "Removing..." : "Remove Card"}
+                </button>
+              </div>
             </div>
           </Surface>
         </div>
