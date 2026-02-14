@@ -539,10 +539,6 @@ const CardPanel = memo(function CardPanel({
             <div className="flex items-center justify-between gap-3">
               <p className="min-w-0 flex-1 text-sm text-white/60">{issuerShortLabel}</p>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="flex flex-col items-center justify-center leading-none px-2" aria-label={`${card.benefits.length} benefits`} title="Benefits">
-                  <span className="text-sm font-semibold text-white/80">{card.benefits.length}</span>
-                  <span className="-mt-0.5 text-[10px] text-white/50">Benefits</span>
-                </span>
                 <button
                   type="button"
                   ref={kebabButtonRef}
