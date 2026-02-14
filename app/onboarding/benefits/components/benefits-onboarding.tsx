@@ -278,7 +278,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
   return (
     <li
       className={cn(
-        "border-b border-white/10 transition-colors last:border-b-0",
+        "transition-colors",
         isRowDimmed ? "opacity-70 saturate-50" : "opacity-100 saturate-100",
       )}
     >
@@ -611,7 +611,7 @@ const CardPanel = memo(function CardPanel({
       </div>
 
       {isExpanded ? (
-        <div className="space-y-3 border-t border-white/10 px-4 py-4">
+        <div className="space-y-2 border-t border-white/10 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
@@ -642,7 +642,7 @@ const CardPanel = memo(function CardPanel({
             </div>
           </div>
 
-          <div id={`panel-${card.cardId}-${activeCadence}`} role="tabpanel" aria-labelledby={`tab-${card.cardId}-${activeCadence}`} className="space-y-2">
+          <div id={`panel-${card.cardId}-${activeCadence}`} role="tabpanel" aria-labelledby={`tab-${card.cardId}-${activeCadence}`} className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{formatCadenceLabel(activeCadence)}</p>
             </div>
@@ -650,7 +650,7 @@ const CardPanel = memo(function CardPanel({
             {activeCadenceBenefits.length === 0 ? (
               <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">No benefits in this cadence.</p>
             ) : (
-              <ul className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
+              <ul className="divide-y divide-white/10">
                 {activeCadenceBenefits.map((benefit) => (
                   <BenefitItem key={benefit.id} benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
                 ))}
