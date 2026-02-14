@@ -413,7 +413,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           aria-hidden={!isExpanded}
         >
           {descriptionText ? (
-            <div className="space-y-2 border-t border-white/10 pt-2">
+            <div className="space-y-2">
               <p className="text-xs leading-relaxed text-white/70">{descriptionText}</p>
             </div>
           ) : null}
@@ -452,6 +452,7 @@ const CardPanel = memo(function CardPanel({
   onRequestRemove,
 }: CardPanelProps) {
   const shortCardName = useMemo(() => getShortCardName(card.cardName, card.issuer), [card.cardName, card.issuer]);
+  const headerDisplayName = useMemo(() => shortCardName.replace(/\s+Card$/i, ""), [shortCardName]);
   const issuerShortLabel = useMemo(() => getIssuerShortLabel(card.issuer), [card.issuer]);
   const cadenceCountByType = useMemo(() => {
     const counts: Record<Cadence, number> = {
@@ -535,7 +536,7 @@ const CardPanel = memo(function CardPanel({
           className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 pt-3 pb-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
           <div className="min-w-0 flex flex-col gap-1">
-            <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
+            <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{headerDisplayName}</p>
             <p className="min-w-0 truncate text-sm leading-snug text-white/55">{`${issuerShortLabel} • ${card.benefits.length} benefits`}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -594,7 +595,7 @@ const CardPanel = memo(function CardPanel({
                       onRequestRemove(card);
                     }}
                   >
-                    Remove card from wallet
+                    Remove
                   </button>
                   <button
                     type="button"
