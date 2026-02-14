@@ -188,6 +188,34 @@ function CheckmarkIcon({ className }: { className?: string }) {
   );
 }
 
+function BellToggleIcon({ className, active }: { className?: string; active: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M10 3.75a3 3 0 0 0-3 3v1.16c0 1-.35 1.96-1 2.72L4.9 11.9c-.28.33-.34.79-.16 1.18s.58.64 1 .64h8.52c.42 0 .81-.25 1-.64s.12-.85-.16-1.18L14 10.63a4.17 4.17 0 0 1-1-2.72V6.75a3 3 0 0 0-3-3Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.5 15.25a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      {active ? (
+        <>
+          <path d="M4.5 6.75c.35-.7.88-1.3 1.52-1.72" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M15.5 6.75c-.35-.7-.88-1.3-1.52-1.72" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </>
+      ) : (
+        <path d="M5 4.75 15 14.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+function TrashCanIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M3.75 5.5h12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M7.25 5.5v-.75c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1v.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M6.75 7.5v7.25c0 .83.67 1.5 1.5 1.5h3.5c.83 0 1.5-.67 1.5-1.5V7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M8.75 9v5.25M11.25 9v5.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 type BenefitItemProps = {
   benefit: BenefitRow;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
@@ -244,7 +272,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
             disabled={remindMeDisabled}
           >
             {isEnrollmentBenefit ? "Enroll Now" : "Remind Me"}
-            {!isEnrollmentBenefit && benefit.remind_me ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+            {!isEnrollmentBenefit ? <BellToggleIcon className="h-3.5 w-3.5 shrink-0" active={benefit.remind_me} /> : null}
           </button>
 
           {isEnrollmentBenefit ? (
@@ -424,19 +452,23 @@ const CardPanel = memo(function CardPanel({
 
                 <button
                   type="button"
-                  className="ml-auto hidden shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:inline-flex"
+                  className="ml-auto hidden shrink-0 items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:inline-flex"
                   onClick={() => onRequestRemove(card)}
+                  aria-label="Remove From Wallet"
                 >
-                  Remove From Wallet
+                  <TrashCanIcon className="h-4 w-4" />
+                  <span className="sr-only">Remove From Wallet</span>
                 </button>
               </div>
 
               <button
                 type="button"
-                className="w-full rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:hidden"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:hidden"
                 onClick={() => onRequestRemove(card)}
+                aria-label="Remove From Wallet"
               >
-                Remove From Wallet
+                <TrashCanIcon className="h-4 w-4" />
+                <span className="sr-only">Remove From Wallet</span>
               </button>
             </div>
           </div>

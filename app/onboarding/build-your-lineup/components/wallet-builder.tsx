@@ -63,6 +63,17 @@ const rowTransition = "transition motion-safe:duration-200 ease-out";
 const controlClasses =
   "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
 
+function TrashCanIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M3.75 5.5h12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M7.25 5.5v-.75c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1v.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M6.75 7.5v7.25c0 .83.67 1.5 1.5 1.5h3.5c.83 0 1.5-.67 1.5-1.5V7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M8.75 9v5.25M11.25 9v5.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function WalletBuilder() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -1094,11 +1105,12 @@ export function WalletBuilder() {
                       </div>
                       <button
                         type="button"
-                        className="ml-auto shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
+                        className="ml-auto inline-flex shrink-0 items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
                         onClick={() => handleRequestRemove(card)}
                         aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
                       >
-                        Remove From Wallet
+                        <TrashCanIcon className="h-4 w-4" />
+                        <span className="sr-only">Remove From Wallet</span>
                       </button>
                     </li>
                   ))}
