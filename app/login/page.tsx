@@ -11,6 +11,18 @@ export default function LoginPage() {
   const shouldShowEnvBanner =
     process.env.NODE_ENV !== "production" ||
     (process.env.NEXT_PUBLIC_VERCEL_ENV != null && process.env.NEXT_PUBLIC_VERCEL_ENV !== "production");
+  const nextPublicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const nextPublicSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+
+    console.info("[login] Supabase NEXT_PUBLIC env presence", {
+      hasNextPublicSupabaseUrl: Boolean(nextPublicSupabaseUrl),
+      hasNextPublicSupabaseAnonKey: Boolean(nextPublicSupabaseAnonKey),
+      nextPublicSupabaseUrlPrefix: nextPublicSupabaseUrl ? `${nextPublicSupabaseUrl.slice(0, 25)}...` : null,
+    });
+  }, [nextPublicSupabaseAnonKey, nextPublicSupabaseUrl]);
 
   const signInWithGoogle = useCallback(async () => {
     let supabase;
