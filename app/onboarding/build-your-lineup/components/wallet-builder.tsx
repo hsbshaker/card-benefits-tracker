@@ -240,10 +240,6 @@ export function WalletBuilder() {
   }, []);
 
   useEffect(() => {
-    searchInputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
     setIsClient(true);
   }, []);
 
@@ -467,14 +463,13 @@ export function WalletBuilder() {
     if (!shouldShowResults) return;
 
     latestQueryRef.current = normalizedQuery;
+    setIsLoading(true);
+    setError(null);
+    requestAbortRef.current?.abort();
 
     const timeout = window.setTimeout(async () => {
       const seq = ++requestSeqRef.current;
       const qAtStart = latestQueryRef.current;
-
-      setIsLoading(true);
-      setError(null);
-      requestAbortRef.current?.abort();
 
       const controller = new AbortController();
       requestAbortRef.current = controller;
