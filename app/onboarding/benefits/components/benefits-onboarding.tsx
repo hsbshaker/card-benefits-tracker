@@ -246,7 +246,6 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
   const isRowDimmed = isEnrollmentBenefit ? benefit.used : !benefit.remind_me;
   const [isExpanded, setIsExpanded] = useState(false);
   const canExpand = Boolean(descriptionText);
-  const hasExtendedDescription = Boolean(descriptionText && previewText && descriptionText !== previewText);
   const detailsRegionId = `benefit-details-${benefit.id}`;
 
   const handleToggleExpand = useCallback(() => {
@@ -283,22 +282,34 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           canExpand ? "cursor-pointer hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]" : "",
         )}
       >
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <p className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-medium leading-5 text-white/95">
-            <span>{benefit.display_name}</span>
-            {formattedAmount ? (
-              <span>
-                {" — "}
-                <span className={BENEFIT_AMOUNT_ACCENT_CLASS}>{formattedAmount}</span>
-              </span>
-            ) : null}
-          </p>
+        <div className="grid grid-cols-[1fr_auto_auto] items-start gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+              {formattedAmount ? (
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+                    BENEFIT_AMOUNT_ACCENT_CLASS,
+                  )}
+                >
+                  {formattedAmount}
+                </span>
+              ) : null}
+            </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+            {previewText ? (
+              <div className="mt-0.5">
+                <p className="text-xs leading-4 text-white/65">{previewText}</p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="shrink-0">
             <button
               type="button"
               className={cn(
-                "inline-flex h-11 w-11 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
                 remindMeDisabled
                   ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
                   : benefit.remind_me
@@ -322,11 +333,13 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
             >
               {!isEnrollmentBenefit ? <BellToggleIcon className="h-4 w-4 shrink-0" active={benefit.remind_me} /> : "Go"}
             </button>
+          </div>
 
+          <div className="shrink-0">
             {canExpand ? (
               <button
                 type="button"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
                 onClick={(event) => {
                   event.stopPropagation();
                   handleToggleExpand();
@@ -337,16 +350,11 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               >
                 <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
               </button>
-            ) : null}
+            ) : (
+              <span className="inline-flex h-11 w-11 shrink-0" aria-hidden />
+            )}
           </div>
         </div>
-
-        {previewText ? (
-          <div className="mt-0.5 flex items-center justify-between gap-2">
-            <p className="min-w-0 text-xs leading-4 text-white/65">{previewText}</p>
-            {hasExtendedDescription && !isExpanded ? <span className="shrink-0 text-[10px] text-white/45">Tap for details</span> : null}
-          </div>
-        ) : null}
 
         <div
           id={detailsRegionId}
