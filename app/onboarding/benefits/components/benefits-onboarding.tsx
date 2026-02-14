@@ -255,7 +255,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           <button
             type="button"
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+              "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
               remindMeDisabled
                 ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
                 : benefit.remind_me
@@ -270,8 +270,9 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               onToggleRemindMe(benefit, !benefit.remind_me);
             }}
             disabled={remindMeDisabled}
+            aria-label={isEnrollmentBenefit ? "Enroll Now" : benefit.remind_me ? "Remind Me On" : "Remind Me Off"}
           >
-            {isEnrollmentBenefit ? "Enroll Now" : "Remind Me"}
+            {isEnrollmentBenefit ? "Enroll Now" : null}
             {!isEnrollmentBenefit ? <BellToggleIcon className="h-3.5 w-3.5 shrink-0" active={benefit.remind_me} /> : null}
           </button>
 
@@ -412,7 +413,19 @@ const CardPanel = memo(function CardPanel({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} benefits</span>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRequestRemove(card);
+            }}
+            aria-label="Remove From Wallet"
+          >
+            <TrashCanIcon className="h-4 w-4" />
+            <span className="sr-only">Remove From Wallet</span>
+          </button>
+          <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
           <span className="text-sm text-white/65">{isExpanded ? "−" : "+"}</span>
         </div>
       </button>
@@ -450,26 +463,7 @@ const CardPanel = memo(function CardPanel({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="ml-auto hidden shrink-0 items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:inline-flex"
-                  onClick={() => onRequestRemove(card)}
-                  aria-label="Remove From Wallet"
-                >
-                  <TrashCanIcon className="h-4 w-4" />
-                  <span className="sr-only">Remove From Wallet</span>
-                </button>
               </div>
-
-              <button
-                type="button"
-                className="inline-flex w-full items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:hidden"
-                onClick={() => onRequestRemove(card)}
-                aria-label="Remove From Wallet"
-              >
-                <TrashCanIcon className="h-4 w-4" />
-                <span className="sr-only">Remove From Wallet</span>
-              </button>
             </div>
           </div>
 
