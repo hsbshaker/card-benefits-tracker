@@ -43,6 +43,7 @@ type WalletCardRow = {
   card_id: string;
   cards: WalletCard[] | null;
 };
+type AddSource = "search" | "issuer";
 
 const ISSUER_OPTIONS: IssuerOption[] = [
   { id: "amex", name: "American Express", enabled: true, kind: "issuer" },
@@ -362,7 +363,7 @@ export function WalletBuilder() {
   );
 
   const addCardFromSearch = useCallback(
-    async (card: CardResult) => {
+    async (card: CardResult, source: AddSource = "search") => {
       if (walletCardIds.has(card.id)) return;
 
       const optimisticInstanceId = `optimistic-${card.id}-${Date.now()}`;
@@ -390,7 +391,7 @@ export function WalletBuilder() {
       });
       markCardForFadeIn(card.id);
 
-      resetSearchUI({ focus: true });
+      resetSearchUI({ focus: source === "search" });
       showAddedConfirmation();
 
       if (!userId) {
@@ -667,7 +668,7 @@ export function WalletBuilder() {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
       if (highlighted) {
-        void addCardFromSearch(highlighted);
+        void addCardFromSearch(highlighted, "search");
       }
     }
   };
@@ -684,7 +685,7 @@ export function WalletBuilder() {
       return;
     }
 
-    void addCardFromSearch(nextCard);
+    void addCardFromSearch(nextCard, "issuer");
     setSelectedIssuerCardId("");
   };
 
@@ -802,15 +803,14 @@ export function WalletBuilder() {
                   <CardResultsList
                     className={cn(
                       "w-full rounded-2xl border border-white/10 bg-slate-950/85 ring-1 ring-white/5 shadow-2xl shadow-[0_25px_60px_-20px_rgba(0,0,0,0.85)] backdrop-blur-md",
-                      showLoading || error || results.length > 0
-                        ? "translate-y-0 opacity-100"
-                        : "pointer-events-none -translate-y-1 opacity-0",
+                      "translate-y-0 opacity-100",
                     )}
                     listClassName="max-h-[40vh] overflow-auto"
                     cards={results}
                     savedCardIds={savedCardIds}
+                    emptyMessage="No cards found. Try a different keyword or issuer."
                     onAdd={(card) => {
-                      void addCardFromSearch(card);
+                      void addCardFromSearch(card, "search");
                     }}
                     isLoading={showLoading}
                     error={error}
@@ -833,15 +833,14 @@ export function WalletBuilder() {
                       <CardResultsList
                         className={cn(
                           "rounded-2xl border border-white/10 bg-slate-950/85 ring-1 ring-white/5 shadow-2xl shadow-[0_25px_60px_-20px_rgba(0,0,0,0.85)] backdrop-blur-md",
-                          showLoading || error || results.length > 0
-                            ? "translate-y-0 opacity-100"
-                            : "pointer-events-none -translate-y-1 opacity-0",
+                          "translate-y-0 opacity-100",
                         )}
                         listClassName="max-h-[24rem] overflow-auto"
                         cards={results}
                         savedCardIds={savedCardIds}
+                        emptyMessage="No cards found. Try a different keyword or issuer."
                         onAdd={(card) => {
-                          void addCardFromSearch(card);
+                          void addCardFromSearch(card, "search");
                         }}
                         isLoading={showLoading}
                         error={error}
