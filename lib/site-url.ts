@@ -1,10 +1,6 @@
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
-export function getSiteUrl() {
-  if (typeof window !== "undefined") {
-    return trimTrailingSlash(window.location.origin);
-  }
-
+export function getSiteURL() {
   const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   if (configuredSiteUrl) {
     return trimTrailingSlash(configuredSiteUrl);
@@ -16,4 +12,8 @@ export function getSiteUrl() {
   }
 
   return "http://localhost:3000";
+}
+
+export function getAuthCallbackURL() {
+  return `${getSiteURL()}/auth/callback`;
 }

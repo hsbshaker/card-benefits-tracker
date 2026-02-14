@@ -3,7 +3,7 @@
 import { useCallback, useEffect } from "react";
 import { useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { getSiteUrl } from "@/lib/site-url";
+import { getAuthCallbackURL, getSiteURL } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +36,8 @@ export default function LoginPage() {
 
     if (!supabase) return;
 
-    const siteUrl = getSiteUrl();
-    const redirectTo = `${siteUrl}/auth/callback`;
+    const siteUrl = getSiteURL();
+    const redirectTo = getAuthCallbackURL();
     if (process.env.NODE_ENV !== "production") {
       console.info("[login] OAuth redirect diagnostics", {
         windowOrigin: typeof window !== "undefined" ? window.location.origin : null,

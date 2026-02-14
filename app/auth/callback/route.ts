@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { getSiteURL } from "@/lib/site-url";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const next = "/onboarding/benefits";
+  const origin = request.nextUrl.origin || getSiteURL();
 
-  const errorRedirect = NextResponse.redirect(new URL("/login", request.url));
+  const errorRedirect = NextResponse.redirect(new URL("/login", origin));
 
   if (!code) {
     console.error("Auth callback missing code parameter", {
@@ -29,5 +31,5 @@ export async function GET(request: NextRequest) {
     return errorRedirect;
   }
 
-  return NextResponse.redirect(new URL(next, request.url));
+  return NextResponse.redirect(new URL(next, origin));
 }
