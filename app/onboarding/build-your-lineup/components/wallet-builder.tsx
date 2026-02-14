@@ -71,6 +71,10 @@ function getIssuerDisplayName(issuer: string) {
   return issuerMap[issuer as keyof typeof issuerMap] ?? issuer;
 }
 
+function getCardSortName(displayName: string | null, cardName: string) {
+  return getCleanCardName(displayName, cardName).toLowerCase().trim();
+}
+
 function TrashCanIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
@@ -130,7 +134,14 @@ export function WalletBuilder() {
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
-  const savedCards = selectedCards;
+  const sortedWalletCards = useMemo(
+    () =>
+      [...selectedCards].sort((a, b) =>
+        getCardSortName(a.display_name, a.card_name).localeCompare(getCardSortName(b.display_name, b.card_name)),
+      ),
+    [selectedCards],
+  );
+  const savedCards = sortedWalletCards;
   const savedCardIds = useMemo(
     () => new Set(savedCards.map((selected) => selected.cardId)),
     [savedCards],
@@ -197,6 +208,10 @@ export function WalletBuilder() {
       issuer: card.issuer,
       network: card.network,
     }));
+
+    persistedCards.sort((a, b) =>
+      getCardSortName(a.display_name, a.card_name).localeCompare(getCardSortName(b.display_name, b.card_name)),
+    );
 
     setSelectedCards(persistedCards);
     setIsWalletLoading(false);
@@ -313,7 +328,7 @@ export function WalletBuilder() {
       setSelectedCards((prev) => {
         if (prev.some((selected) => selected.cardId === card.id)) return prev;
 
-        return [
+        const next = [
           ...prev,
           {
             instanceId: optimisticInstanceId,
@@ -325,6 +340,12 @@ export function WalletBuilder() {
             network: card.network,
           } satisfies BaseCardInstance,
         ];
+
+        next.sort((a, b) =>
+          getCardSortName(a.display_name, a.card_name).localeCompare(getCardSortName(b.display_name, b.card_name)),
+        );
+
+        return next;
       });
 
       resetSearchUI({ focus: true });
@@ -898,7 +919,7 @@ export function WalletBuilder() {
                 <ul className="divide-y divide-white/10">
                   {savedCards.map((card) => (
                     <li
-                      key={card.instanceId}
+                      key={card.cardId}
                       className="flex items-center justify-between gap-3 px-4 py-4 sm:py-3 motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
                     >
                       <div className="min-w-0">
@@ -907,8 +928,6 @@ export function WalletBuilder() {
                         </p>
                         <p className="mt-0.5 text-sm text-white/55">
                           {getIssuerDisplayName(card.issuer)}
-                          {" • "}
-                          {card.network ?? "N/A"}
                         </p>
                       </div>
                       <button
