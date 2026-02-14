@@ -8,12 +8,26 @@ export async function GET(request: NextRequest) {
 
   const errorRedirect = NextResponse.redirect(new URL("/login", request.url));
 
-  if (!code) return errorRedirect;
+  if (!code) {
+    console.error("Auth callback missing code parameter", {
+      pathname: url.pathname,
+      hasCode: false,
+    });
+    return errorRedirect;
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-  if (error) return errorRedirect;
+  if (error) {
+    console.error("Auth callback failed to exchange code for session", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
+    return errorRedirect;
+  }
 
   return NextResponse.redirect(new URL(next, request.url));
 }

@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getSiteUrl } from "@/lib/site-url";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -85,11 +86,20 @@ export default function LandingPage() {
     if (!supabase) return;
 
     setIsSigningIn(true);
+    const siteUrl = getSiteUrl();
+    const redirectTo = `${siteUrl}/auth/callback`;
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[landing] OAuth redirect diagnostics", {
+        windowOrigin: typeof window !== "undefined" ? window.location.origin : null,
+        computedSiteUrl: siteUrl,
+        redirectTo,
+      });
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/onboarding/benefits`,
+        redirectTo,
         queryParams: {
           prompt: "select_account",
         },
