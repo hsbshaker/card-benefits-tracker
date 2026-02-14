@@ -266,7 +266,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
   return (
     <li
       className={cn(
-        "rounded-xl border border-white/10 bg-white/[0.04] transition-all",
+        "border-b border-white/10 transition-colors last:border-b-0",
         isRowDimmed ? "opacity-70 saturate-50" : "opacity-100 saturate-100",
       )}
     >
@@ -278,11 +278,11 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
         onClick={handleToggleExpand}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "w-full rounded-xl px-3 py-2 text-left transition-colors sm:px-3.5",
-          canExpand ? "cursor-pointer hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]" : "",
+          "w-full px-3 py-2.5 text-left transition-colors",
+          canExpand ? "cursor-pointer hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset" : "",
         )}
       >
-        <div className="grid grid-cols-[1fr_auto] items-start gap-3">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-2.5">
           <div className="min-w-0">
             <p className="min-w-0 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
 
@@ -306,16 +306,16 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
             ) : null}
           </div>
 
-          <div className="mt-6 flex shrink-0 items-center gap-1">
+          <div className="mt-5 flex shrink-0 items-center gap-0.5">
             <button
               type="button"
               className={cn(
                 "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
                 remindMeDisabled
-                  ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                  ? "cursor-not-allowed border-white/10 bg-white/[0.03] text-white/35"
                   : benefit.remind_me
-                    ? "border-emerald-300/45 bg-emerald-400/20 text-emerald-100"
-                    : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/85",
+                    ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
+                    : "border-white/12 bg-white/[0.03] text-white/60 hover:bg-white/[0.08] hover:text-white/85",
               )}
               onClick={(event) => {
                 event.stopPropagation();
@@ -337,7 +337,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
             {canExpand ? (
               <button
                 type="button"
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/55 transition hover:bg-white/10 hover:text-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
                 onClick={(event) => {
                   event.stopPropagation();
                   handleToggleExpand();
@@ -376,7 +376,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               "mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
               benefit.used
                 ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
-                : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+                : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
             )}
             onClick={(event) => {
               event.stopPropagation();
@@ -488,7 +488,7 @@ const CardPanel = memo(function CardPanel({
             event.preventDefault();
             onToggleExpand(card.cardId);
           }}
-          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
+          className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
@@ -497,7 +497,7 @@ const CardPanel = memo(function CardPanel({
               {card.network ? ` • ${card.network}` : ""}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
             <button
               type="button"
@@ -539,38 +539,33 @@ const CardPanel = memo(function CardPanel({
       </div>
 
       {isExpanded ? (
-        <div className="space-y-4 border-t border-white/10 px-5 py-4">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-1">
-            <div className="space-y-2 md:space-y-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                  <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1">
-                    {CADENCE_ORDER.map((cadence) => {
-                      const count = cadenceCountByType[cadence];
-                      const isActive = cadence === activeCadence;
-                      return (
-                        <button
-                          key={cadence}
-                          id={`tab-${card.cardId}-${cadence}`}
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive}
-                          aria-controls={`panel-${card.cardId}-${cadence}`}
-                          tabIndex={isActive ? 0 : -1}
-                          className={cn(
-                            "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                            isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
-                          )}
-                          onClick={() => onCadenceChange(card.cardId, cadence)}
-                          onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
-                        >
-                          {formatCadenceLabel(cadence)} ({count})
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
+        <div className="space-y-3 border-t border-white/10 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                {CADENCE_ORDER.map((cadence) => {
+                  const count = cadenceCountByType[cadence];
+                  const isActive = cadence === activeCadence;
+                  return (
+                    <button
+                      key={cadence}
+                      id={`tab-${card.cardId}-${cadence}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-controls={`panel-${card.cardId}-${cadence}`}
+                      tabIndex={isActive ? 0 : -1}
+                      className={cn(
+                        "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                        isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
+                      )}
+                      onClick={() => onCadenceChange(card.cardId, cadence)}
+                      onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
+                    >
+                      {formatCadenceLabel(cadence)} ({count})
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -583,7 +578,7 @@ const CardPanel = memo(function CardPanel({
             {activeCadenceBenefits.length === 0 ? (
               <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">No benefits in this cadence.</p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
                 {activeCadenceBenefits.map((benefit) => (
                   <BenefitItem key={benefit.id} benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
                 ))}
