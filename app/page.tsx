@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -36,7 +36,7 @@ export default function LandingPage() {
     const run = async () => {
       let supabase;
       try {
-        supabase = getBrowserSupabaseClient();
+        supabase = createSupabaseBrowserClient();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
         if (!isMounted) return;
@@ -76,7 +76,7 @@ export default function LandingPage() {
 
     let supabase;
     try {
-      supabase = getBrowserSupabaseClient();
+      supabase = createSupabaseBrowserClient();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
       setEnvError(message);
@@ -113,7 +113,7 @@ export default function LandingPage() {
   async function signOut() {
     let supabase;
     try {
-      supabase = getBrowserSupabaseClient();
+      supabase = createSupabaseBrowserClient();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
       setEnvError(message);

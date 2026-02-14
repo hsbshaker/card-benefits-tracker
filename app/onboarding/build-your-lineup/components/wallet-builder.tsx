@@ -7,7 +7,7 @@ import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CardResult, CardResultsList } from "./card-results-list";
 
 type IssuerOption = {
@@ -54,7 +54,7 @@ const controlClasses =
 
 export function WalletBuilder() {
   const router = useRouter();
-  const supabase = useMemo(() => getBrowserSupabaseClient(), []);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CardResult[]>([]);

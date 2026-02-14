@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default function LoginPage() {
 
     let supabase;
     try {
-      supabase = getBrowserSupabaseClient();
+      supabase = createSupabaseBrowserClient();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
       setEnvError(message);

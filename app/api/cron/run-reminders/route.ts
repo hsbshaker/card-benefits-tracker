@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { getServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
 
