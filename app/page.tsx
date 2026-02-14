@@ -6,7 +6,6 @@ import type { User } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { getAuthCallbackURL, getSiteURL } from "@/lib/site-url";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Surface } from "@/components/ui/Surface";
@@ -85,12 +84,15 @@ export default function LandingPage() {
     if (!supabase) return;
 
     setIsSigningIn(true);
-    const siteUrl = getSiteURL();
-    const redirectTo = getAuthCallbackURL();
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+    const redirectTo = `${origin}/auth/callback`;
     if (process.env.NODE_ENV !== "production") {
       console.info("[landing] OAuth redirect diagnostics", {
         windowOrigin: typeof window !== "undefined" ? window.location.origin : null,
-        computedSiteUrl: siteUrl,
+        computedOrigin: origin,
         redirectTo,
       });
     }
