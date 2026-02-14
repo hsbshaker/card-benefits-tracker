@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
   type ProfilerOnRenderCallback,
 } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -270,12 +271,29 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           canExpand ? "cursor-pointer hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset" : "",
         )}
       >
-        <div className="grid grid-cols-[1fr_auto] items-start gap-2.5">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-2">
           <div className="min-w-0">
-            <p className="min-w-0 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+            <div className="flex min-w-0 items-center gap-1">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+              {canExpand ? (
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleToggleExpand();
+                  }}
+                  aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
+                  aria-expanded={isExpanded}
+                  aria-controls={detailsRegionId}
+                >
+                  <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
+                </button>
+              ) : null}
+            </div>
 
             {formattedAmount ? (
-              <div className="mt-1 flex items-center">
+              <div className="mt-2 flex items-center">
                 <span
                   className={cn(
                     "inline-flex shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
@@ -289,7 +307,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
 
           </div>
 
-          <div className="mt-3.5 flex shrink-0 items-center gap-1">
+          <div className="mt-0.5 flex shrink-0 items-start">
             <button
               type="button"
               className={cn(
@@ -317,23 +335,6 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
             >
               {!isEnrollmentBenefit ? <BellToggleIcon className="h-[18px] w-[18px] shrink-0" active={benefit.remind_me} /> : "Go"}
             </button>
-            {canExpand ? (
-              <button
-                type="button"
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleToggleExpand();
-                }}
-                aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
-                aria-expanded={isExpanded}
-                aria-controls={detailsRegionId}
-              >
-                <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
-              </button>
-            ) : (
-              <span className="inline-flex h-11 w-11 shrink-0" aria-hidden />
-            )}
           </div>
         </div>
 
@@ -423,32 +424,42 @@ const CardPanel = memo(function CardPanel({
     [card.benefits, activeCadence],
   );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const kebabButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = kebabButtonRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 210;
+    const viewportPadding = 12;
+    const nextLeft = Math.min(
+      Math.max(viewportPadding, rect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
+    );
+    setMenuPosition({ top: rect.bottom + 6, left: nextLeft });
+  }, []);
 
   useEffect(() => {
     if (!isMenuOpen) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!menuRef.current) return;
-      const targetNode = event.target as Node;
-      if (!menuRef.current.contains(targetNode)) {
-        setIsMenuOpen(false);
-      }
-    };
+    updateMenuPosition();
 
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsMenuOpen(false);
       }
     };
+    const onViewportChange = () => updateMenuPosition();
 
-    window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("scroll", onViewportChange, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("scroll", onViewportChange, true);
     };
-  }, [isMenuOpen]);
+  }, [isMenuOpen, updateMenuPosition]);
 
   if (isRemoved) {
     return (
@@ -459,7 +470,7 @@ const CardPanel = memo(function CardPanel({
   }
 
   return (
-    <Surface key={card.cardId} className="overflow-hidden p-0 backdrop-blur-0 [content-visibility:auto] [contain-intrinsic-size:80px]">
+    <Surface key={card.cardId} className="p-0 backdrop-blur-0 [content-visibility:auto] [contain-intrinsic-size:80px]">
       <div className="relative">
         <div
           role="button"
@@ -471,7 +482,7 @@ const CardPanel = memo(function CardPanel({
             event.preventDefault();
             onToggleExpand(card.cardId);
           }}
-          className="flex w-full items-center justify-between gap-3 pl-3 pr-2.5 py-3.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
+          className="flex w-full items-center justify-between gap-3 pl-3 pr-3.5 py-3.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
@@ -484,41 +495,73 @@ const CardPanel = memo(function CardPanel({
             <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
             <button
               type="button"
+              ref={kebabButtonRef}
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
               onClick={(event) => {
                 event.stopPropagation();
-                setIsMenuOpen((prev) => !prev);
+                setIsMenuOpen((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    requestAnimationFrame(() => updateMenuPosition());
+                  }
+                  return next;
+                });
               }}
-              aria-label={`Open actions for ${card.cardName}`}
+              aria-label={`${isMenuOpen ? "Close" : "Open"} actions for ${card.cardName}`}
               aria-expanded={isMenuOpen}
             >
               <KebabIcon className="h-4 w-4" />
             </button>
-            <span className="text-sm text-white/65">{isExpanded ? "−" : "+"}</span>
+            <button
+              type="button"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-base text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleExpand(card.cardId);
+              }}
+              aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
+              aria-expanded={isExpanded}
+            >
+              {isExpanded ? "−" : "+"}
+            </button>
           </div>
         </div>
 
-        {isMenuOpen ? (
-          <div ref={menuRef} className="absolute right-5 top-14 z-20 min-w-[210px] rounded-xl border border-white/15 bg-[#0F172A] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
-            <button
-              type="button"
-              className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-[#F8C1C1] transition hover:bg-[#B04646]/30"
-              onClick={() => {
-                setIsMenuOpen(false);
-                onRequestRemove(card);
-              }}
-            >
-              Remove card from wallet
-            </button>
-            <button
-              type="button"
-              className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-white/75 transition hover:bg-white/10 hover:text-white/90"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : null}
+        {isMenuOpen && menuPosition
+          ? createPortal(
+              <>
+                <button
+                  type="button"
+                  aria-label="Close card actions"
+                  className="fixed inset-0 z-[90] cursor-default bg-transparent"
+                  onClick={() => setIsMenuOpen(false)}
+                />
+                <div
+                  className="fixed z-[100] min-w-[210px] rounded-xl border border-white/15 bg-[#0F172A] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
+                  style={{ top: menuPosition.top, left: menuPosition.left }}
+                >
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-[#F8C1C1] transition hover:bg-[#B04646]/30"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onRequestRemove(card);
+                    }}
+                  >
+                    Remove card from wallet
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-white/75 transition hover:bg-white/10 hover:text-white/90"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>,
+              document.body,
+            )
+          : null}
       </div>
 
       {isExpanded ? (
