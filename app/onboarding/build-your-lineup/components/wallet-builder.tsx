@@ -962,7 +962,7 @@ export function WalletBuilder() {
                     <li
                       key={card.cardId}
                       className={cn(
-                        "flex items-center justify-between gap-3 px-4 py-4 transition-opacity transition-colors duration-200 hover:bg-white/5 sm:py-3",
+                        "flex items-center justify-between gap-3 px-4 py-4 transition-opacity transition-colors duration-200 hover:bg-white/[0.025] sm:py-3",
                         enteringCardIds.has(card.cardId) ? "opacity-0" : "opacity-100",
                       )}
                     >
