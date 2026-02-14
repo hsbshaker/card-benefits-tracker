@@ -86,15 +86,10 @@ export default function LandingPage() {
     if (!supabase) return;
 
     setIsSigningIn(true);
-    const origin =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-    const redirectTo = `${origin}/auth/callback`;
+    const redirectTo = `${window.location.origin}/auth/callback`;
     if (process.env.NODE_ENV !== "production") {
       console.info("[landing] OAuth redirect diagnostics", {
-        windowOrigin: typeof window !== "undefined" ? window.location.origin : null,
-        computedOrigin: origin,
+        windowOrigin: window.location.origin,
         redirectTo,
       });
     }
