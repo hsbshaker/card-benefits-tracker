@@ -534,10 +534,9 @@ const CardPanel = memo(function CardPanel({
           }}
           className="w-full px-4 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
-          <div className="flex w-full min-w-0 flex-col gap-2">
-            <p className="line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
+          <div className="flex w-full min-w-0 flex-col gap-1">
             <div className="flex items-center justify-between gap-3">
-              <p className="min-w-0 flex-1 text-sm text-white/60">{issuerShortLabel}</p>
+              <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
@@ -567,11 +566,12 @@ const CardPanel = memo(function CardPanel({
                   }}
                   aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
                   aria-expanded={isExpanded}
-                >
+                  >
                   <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
                 </button>
               </div>
             </div>
+            <p className="min-w-0 text-sm leading-snug text-white/60">{issuerShortLabel}</p>
           </div>
         </div>
 
