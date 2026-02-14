@@ -3,20 +3,16 @@
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { SlidersHorizontal } from "lucide-react";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CardResult, CardResultsList } from "./card-results-list";
-
-type IssuerOption = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  kind: "issuer";
-};
 
 type BaseCardInstance = {
   instanceId: string;
@@ -43,14 +39,6 @@ type WalletCardRow = {
   card_id: string;
   cards: WalletCard[] | null;
 };
-type AddSource = "search" | "issuer";
-
-const ISSUER_OPTIONS: IssuerOption[] = [
-  { id: "amex", name: "American Express", enabled: true, kind: "issuer" },
-  { id: "chase", name: "Chase", enabled: false, kind: "issuer" },
-  { id: "capital-one", name: "Capital One", enabled: false, kind: "issuer" },
-  { id: "citi", name: "Citi", enabled: false, kind: "issuer" },
-];
 
 const rowTransition = "transition motion-safe:duration-200 ease-out";
 const controlClasses =
@@ -76,6 +64,79 @@ function getCardSortName(displayName: string | null, cardName: string) {
   return getCleanCardName(displayName, cardName).toLowerCase().trim();
 }
 
+function normalizeValue(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function getIssuerSearchTokens(issuer: string) {
+  const normalizedIssuer = normalizeValue(issuer);
+  if (normalizedIssuer === "american express") {
+    return [normalizedIssuer, "amex"];
+  }
+  if (normalizedIssuer === "capital one") {
+    return [normalizedIssuer, "capitalone"];
+  }
+  return [normalizedIssuer];
+}
+
+function getMatchScore(value: string, query: string) {
+  if (!value) return 0;
+  if (value === query) return 700;
+  if (value.startsWith(query)) return 500;
+  if (value.includes(query)) return 280;
+  return 0;
+}
+
+function filterAndRankCards(
+  cards: CardResult[],
+  query: string,
+  selectedIssuers: string[],
+  selectedNetworks: string[],
+) {
+  const normalizedQuery = normalizeValue(query);
+  const selectedIssuerSet = new Set(selectedIssuers);
+  const selectedNetworkSet = new Set(selectedNetworks);
+  const hasIssuerFilter = selectedIssuerSet.size > 0;
+  const hasNetworkFilter = selectedNetworkSet.size > 0;
+
+  return cards
+    .filter((card) => {
+      if (hasIssuerFilter && !selectedIssuerSet.has(card.issuer)) return false;
+      if (hasNetworkFilter) {
+        const network = card.network ?? "";
+        if (!selectedNetworkSet.has(network)) return false;
+      }
+      return true;
+    })
+    .map((card) => {
+      const issuerTokens = getIssuerSearchTokens(card.issuer);
+      const nameTokens = [normalizeValue(card.display_name), normalizeValue(card.card_name)];
+      const networkToken = normalizeValue(card.network);
+
+      if (!normalizedQuery) {
+        return { card, score: 0 };
+      }
+
+      const issuerScore = Math.max(...issuerTokens.map((token) => getMatchScore(token, normalizedQuery)));
+      const nameScore = Math.max(...nameTokens.map((token) => getMatchScore(token, normalizedQuery)));
+      const networkScore = getMatchScore(networkToken, normalizedQuery);
+      const score = Math.max(issuerScore + 40, nameScore, networkScore);
+
+      if (score <= 0) return null;
+      return { card, score };
+    })
+    .filter((row): row is { card: CardResult; score: number } => row !== null)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const nameCompare = getCardSortName(a.card.display_name, a.card.card_name).localeCompare(
+        getCardSortName(b.card.display_name, b.card.card_name),
+      );
+      if (nameCompare !== 0) return nameCompare;
+      return a.card.issuer.localeCompare(b.card.issuer);
+    })
+    .map((row) => row.card);
+}
+
 function TrashCanIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
@@ -90,19 +151,15 @@ function TrashCanIcon({ className }: { className?: string }) {
 export function WalletBuilder() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [activeIssuer, setActiveIssuer] = useState("");
   const [query, setQuery] = useState("");
   const [isResultsOpen, setIsResultsOpen] = useState(false);
-  const [results, setResults] = useState<CardResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showLoading, setShowLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [cardsIndex, setCardsIndex] = useState<CardResult[]>([]);
+  const [isCardsIndexLoading, setIsCardsIndexLoading] = useState(false);
+  const [cardsIndexError, setCardsIndexError] = useState<string | null>(null);
+  const [selectedIssuerFilters, setSelectedIssuerFilters] = useState<string[]>([]);
+  const [selectedNetworkFilters, setSelectedNetworkFilters] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCards, setSelectedCards] = useState<SelectedCardInstance[]>([]);
-  const [issuerCardOptions, setIssuerCardOptions] = useState<CardResult[]>([]);
-  const [issuerCardLoading, setIssuerCardLoading] = useState(false);
-  const [issuerCardError, setIssuerCardError] = useState<string | null>(null);
-  const [selectedIssuerCardId, setSelectedIssuerCardId] = useState("");
   const [isWalletLoading, setIsWalletLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(false);
@@ -113,15 +170,11 @@ export function WalletBuilder() {
   const [enteringCardIds, setEnteringCardIds] = useState<Set<string>>(new Set());
   const [showWalletScrollCue, setShowWalletScrollCue] = useState(false);
 
-  const requestAbortRef = useRef<AbortController | null>(null);
-  const requestSeqRef = useRef(0);
-  const latestQueryRef = useRef<string>("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputWrapRef = useRef<HTMLDivElement | null>(null);
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const resultsOverlayRef = useRef<HTMLDivElement | null>(null);
   const walletListRef = useRef<HTMLDivElement | null>(null);
-  const loadingDelayRef = useRef<number | null>(null);
   const addToastTimerRef = useRef<number | null>(null);
   const enterTimersRef = useRef<number[]>([]);
   const enterAnimationFramesRef = useRef<number[]>([]);
@@ -133,10 +186,23 @@ export function WalletBuilder() {
   } | null>(null);
 
   const normalizedQuery = query.trim();
-  const isSearching = normalizedQuery.length > 0;
-  const shouldShowResults = isResultsOpen && normalizedQuery.length >= 1;
-  const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
-  const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
+  const hasActiveFilters = selectedIssuerFilters.length > 0 || selectedNetworkFilters.length > 0;
+  const shouldShowResults = isResultsOpen && (normalizedQuery.length >= 1 || hasActiveFilters);
+  const issuerFilterOptions = useMemo(
+    () => Array.from(new Set(cardsIndex.map((card) => card.issuer))).sort((a, b) => a.localeCompare(b)),
+    [cardsIndex],
+  );
+  const networkFilterOptions = useMemo(
+    () =>
+      Array.from(new Set(cardsIndex.map((card) => card.network).filter((network): network is string => Boolean(network)))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [cardsIndex],
+  );
+  const results = useMemo(
+    () => filterAndRankCards(cardsIndex, normalizedQuery, selectedIssuerFilters, selectedNetworkFilters),
+    [cardsIndex, normalizedQuery, selectedIssuerFilters, selectedNetworkFilters],
+  );
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
   const sortedWalletCards = useMemo(
     () =>
@@ -150,8 +216,6 @@ export function WalletBuilder() {
     () => new Set(savedCards.map((selected) => selected.cardId)),
     [savedCards],
   );
-  const issuerHasValue = activeIssuer !== "";
-  const cardHasValue = Boolean(selectedIssuerCardId);
 
   useEffect(() => {
     let isMounted = true;
@@ -221,17 +285,10 @@ export function WalletBuilder() {
     setIsWalletLoading(false);
   }, [supabase, userId]);
 
-  const resetSearchUI = useCallback(({ focus = true }: { focus?: boolean } = {}) => {
+  const resetSearchUI = useCallback(({ focus = false }: { focus?: boolean } = {}) => {
     setIsResultsOpen(false);
     setQuery("");
-    setResults([]);
-    setError(null);
-    setIsLoading(false);
-    setShowLoading(false);
     setHighlightedIndex(0);
-    requestSeqRef.current += 1;
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = null;
     if (focus) {
       requestAnimationFrame(() => {
         searchInputRef.current?.focus();
@@ -359,7 +416,7 @@ export function WalletBuilder() {
   );
 
   const addCardFromSearch = useCallback(
-    async (card: CardResult, source: AddSource = "search") => {
+    async (card: CardResult) => {
       if (walletCardIds.has(card.id)) return;
 
       const optimisticInstanceId = `optimistic-${card.id}-${Date.now()}`;
@@ -387,7 +444,7 @@ export function WalletBuilder() {
       });
       markCardForFadeIn(card.id);
 
-      resetSearchUI({ focus: source === "search" });
+      resetSearchUI({ focus: false });
       showAddedConfirmation();
 
       if (!userId) {
@@ -443,139 +500,50 @@ export function WalletBuilder() {
   );
 
   useEffect(() => {
-    if (!shouldShowResults) {
-      if (results.length) setResults([]);
-      if (isLoading) setIsLoading(false);
-      if (error) setError(null);
-      if (highlightedIndex !== 0) setHighlightedIndex(0);
-      requestSeqRef.current += 1;
-      requestAbortRef.current?.abort();
-      requestAbortRef.current = null;
-    }
-  }, [shouldShowResults, results.length, isLoading, error, highlightedIndex]);
-
-  const singleEnabledIssuerId = useMemo(
-    () => (enabledIssuers.length === 1 ? enabledIssuers[0].id : null),
-    [enabledIssuers],
-  );
+    setHighlightedIndex((prev) => (results.length === 0 ? 0 : Math.min(prev, results.length - 1)));
+  }, [results.length]);
 
   useEffect(() => {
-    if (!shouldShowResults) return;
+    let cancelled = false;
 
-    latestQueryRef.current = normalizedQuery;
-    setIsLoading(true);
-    setError(null);
-    requestAbortRef.current?.abort();
-
-    const timeout = window.setTimeout(async () => {
-      const seq = ++requestSeqRef.current;
-      const qAtStart = latestQueryRef.current;
-
-      const controller = new AbortController();
-      requestAbortRef.current = controller;
+    const loadCardsIndex = async () => {
+      setIsCardsIndexLoading(true);
+      setCardsIndexError(null);
 
       try {
-        const params = new URLSearchParams({ q: qAtStart });
-        if (singleEnabledIssuerId) params.set("issuer", singleEnabledIssuerId);
-
-        const response = await fetch(`/api/cards?${params.toString()}`, { method: "GET", signal: controller.signal });
-
+        const response = await fetch("/api/cards", { method: "GET" });
         if (!response.ok) {
           const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
           throw new Error(errorPayload?.error ?? "Failed to load cards");
         }
 
         const data: CardResult[] = await response.json();
-        if (seq !== requestSeqRef.current) return;
-
-        setResults(data);
-        setError(null);
-        setHighlightedIndex((prev) => (data.length === 0 ? 0 : Math.min(prev, data.length - 1)));
+        if (cancelled) return;
+        setCardsIndex(data);
       } catch (fetchError) {
-        if (controller.signal.aborted || seq !== requestSeqRef.current) return;
-
-        setError(fetchError instanceof Error ? fetchError.message : "Failed to load cards");
-        setResults([]);
+        if (cancelled) return;
+        setCardsIndex([]);
+        setCardsIndexError(fetchError instanceof Error ? fetchError.message : "Failed to load cards");
       } finally {
-        if (seq === requestSeqRef.current) setIsLoading(false);
+        if (!cancelled) setIsCardsIndexLoading(false);
       }
-    }, 200);
+    };
 
-    return () => window.clearTimeout(timeout);
-  }, [normalizedQuery, shouldShowResults, singleEnabledIssuerId]);
-
-  useEffect(() => {
-    if (loadingDelayRef.current) {
-      window.clearTimeout(loadingDelayRef.current);
-      loadingDelayRef.current = null;
-    }
-
-    if (!isLoading) {
-      setShowLoading(false);
-      return;
-    }
-
-    loadingDelayRef.current = window.setTimeout(() => {
-      setShowLoading(true);
-      loadingDelayRef.current = null;
-    }, 200);
+    void loadCardsIndex();
 
     return () => {
-      if (loadingDelayRef.current) {
-        window.clearTimeout(loadingDelayRef.current);
-        loadingDelayRef.current = null;
-      }
+      cancelled = true;
     };
-  }, [isLoading]);
+  }, []);
 
   useEffect(() => {
-    setIssuerCardOptions([]);
-    setIssuerCardError(null);
-    setSelectedIssuerCardId("");
-
-    const selectedIssuer = ISSUER_OPTIONS.find((option) => option.id === activeIssuer);
-    if (!activeIssuer || !selectedIssuer?.enabled) {
-      setIssuerCardLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-
-    const loadIssuerCards = async () => {
-      setIssuerCardLoading(true);
-      try {
-        const params = new URLSearchParams({ issuer: activeIssuer });
-        const response = await fetch(`/api/cards?${params.toString()}`, { method: "GET", signal: controller.signal });
-
-        if (!response.ok) {
-          const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(errorPayload?.error ?? "Failed to load issuer cards");
-        }
-
-        const data: CardResult[] = await response.json();
-        setIssuerCardOptions(data);
-      } catch (fetchError) {
-        if (controller.signal.aborted) return;
-
-        setIssuerCardOptions([]);
-        setIssuerCardError(fetchError instanceof Error ? fetchError.message : "Failed to load issuer cards");
-      } finally {
-        if (!controller.signal.aborted) setIssuerCardLoading(false);
-      }
-    };
-
-    loadIssuerCards();
-
-    return () => controller.abort();
-  }, [activeIssuer]);
-
-  useEffect(() => {
-    if (!isSearching && !shouldShowResults) return;
+    if (!shouldShowResults) return;
 
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (searchAreaRef.current?.contains(target)) return;
       if (resultsOverlayRef.current?.contains(target)) return;
+      if (target instanceof HTMLElement && target.closest("[data-search-filters-content='true']")) return;
       resetSearchUI({ focus: false });
     };
 
@@ -591,7 +559,7 @@ export function WalletBuilder() {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [isSearching, shouldShowResults, resetSearchUI]);
+  }, [shouldShowResults, resetSearchUI]);
 
   useEffect(() => {
     if (!shouldShowResults || !isClient) {
@@ -618,7 +586,7 @@ export function WalletBuilder() {
       window.removeEventListener("resize", updateOverlayPosition);
       window.removeEventListener("scroll", updateOverlayPosition, true);
     };
-  }, [shouldShowResults, isClient, results.length, showLoading, error]);
+  }, [shouldShowResults, isClient, results.length, isCardsIndexLoading, cardsIndexError]);
 
   const updateWalletScrollCue = useCallback(() => {
     const element = walletListRef.current;
@@ -662,27 +630,32 @@ export function WalletBuilder() {
     if (event.key === "Enter") {
       event.preventDefault();
       const highlighted = results[highlightedIndex];
-      if (highlighted) {
-        void addCardFromSearch(highlighted, "search");
-      }
+      if (highlighted) void addCardFromSearch(highlighted);
     }
   };
 
-  const handleIssuerCardSelect = (nextCardId: string) => {
-    setSelectedIssuerCardId(nextCardId);
-    if (!nextCardId) return;
+  const toggleIssuerFilter = useCallback((issuer: string) => {
+    setSelectedIssuerFilters((prev) =>
+      prev.includes(issuer) ? prev.filter((value) => value !== issuer) : [...prev, issuer],
+    );
+    setIsResultsOpen(true);
+    setHighlightedIndex(0);
+  }, []);
 
-    const nextCard = issuerCardOptions.find((card) => card.id === nextCardId);
-    if (!nextCard) return;
+  const toggleNetworkFilter = useCallback((network: string) => {
+    setSelectedNetworkFilters((prev) =>
+      prev.includes(network) ? prev.filter((value) => value !== network) : [...prev, network],
+    );
+    setIsResultsOpen(true);
+    setHighlightedIndex(0);
+  }, []);
 
-    if (walletCardIds.has(nextCard.id)) {
-      setSelectedIssuerCardId("");
-      return;
-    }
-
-    void addCardFromSearch(nextCard, "issuer");
-    setSelectedIssuerCardId("");
-  };
+  const clearFilters = useCallback(() => {
+    setSelectedIssuerFilters([]);
+    setSelectedNetworkFilters([]);
+    setHighlightedIndex(0);
+    if (!normalizedQuery) setIsResultsOpen(false);
+  }, [normalizedQuery]);
 
   const handleRequestRemove = useCallback(
     (card: BaseCardInstance) => {
@@ -779,17 +752,91 @@ export function WalletBuilder() {
                     onChange={(event) => {
                       const nextQuery = event.target.value;
                       setQuery(nextQuery);
-                      setIsResultsOpen(nextQuery.trim().length >= 1);
+                      setIsResultsOpen(nextQuery.trim().length >= 1 || hasActiveFilters);
                       setHighlightedIndex(0);
                     }}
                     onFocus={() => {
-                      if (query.trim().length >= 1) setIsResultsOpen(true);
+                      if (query.trim().length >= 1 || hasActiveFilters) setIsResultsOpen(true);
                     }}
                     onKeyDown={handleResultsKeyDown}
                     placeholder="Search by credit card (e.g., Sapphire, Platinum)"
                     autoComplete="off"
-                    className={cn(controlClasses, "min-w-0 pl-9 text-white/95", rowTransition)}
+                    className={cn(controlClasses, "min-w-0 pl-9 pr-12 text-white/95", rowTransition)}
                   />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Filters"
+                        className={cn(
+                          "absolute inset-y-0 right-1.5 inline-flex h-9 w-9 items-center justify-center self-center rounded-lg border border-transparent text-white/65 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white",
+                          hasActiveFilters && "border-[#F7C948]/35 bg-[#F7C948]/15 text-[#F7C948]",
+                        )}
+                      >
+                        <SlidersHorizontal className="h-4 w-4" />
+                        {hasActiveFilters ? <span className="sr-only">Filters active</span> : null}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent data-search-filters-content="true" className="w-64 p-3">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Filters</p>
+                          <button
+                            type="button"
+                            onClick={clearFilters}
+                            className="text-xs font-medium text-white/70 transition-colors hover:text-white"
+                            disabled={!hasActiveFilters}
+                          >
+                            Clear
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Issuer</p>
+                          <div className="space-y-1.5">
+                            {issuerFilterOptions.map((issuer) => {
+                              const checkboxId = `issuer-filter-${issuer.toLowerCase().replace(/\s+/g, "-")}`;
+                              const checked = selectedIssuerFilters.includes(issuer);
+                              return (
+                                <label key={issuer} htmlFor={checkboxId} className="flex cursor-pointer items-center gap-2.5 text-sm text-white/85">
+                                  <Checkbox
+                                    id={checkboxId}
+                                    checked={checked}
+                                    onCheckedChange={() => toggleIssuerFilter(issuer)}
+                                    aria-label={issuer}
+                                  />
+                                  <span className="truncate">{getIssuerDisplayName(issuer)}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {networkFilterOptions.length > 0 ? (
+                          <div className="space-y-2 border-t border-white/10 pt-2">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Network</p>
+                            <div className="space-y-1.5">
+                              {networkFilterOptions.map((network) => {
+                                const checkboxId = `network-filter-${network.toLowerCase().replace(/\s+/g, "-")}`;
+                                const checked = selectedNetworkFilters.includes(network);
+                                return (
+                                  <label key={network} htmlFor={checkboxId} className="flex cursor-pointer items-center gap-2.5 text-sm text-white/85">
+                                    <Checkbox
+                                      id={checkboxId}
+                                      checked={checked}
+                                      onCheckedChange={() => toggleNetworkFilter(network)}
+                                      aria-label={network}
+                                    />
+                                    <span className="truncate">{network}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
@@ -803,12 +850,12 @@ export function WalletBuilder() {
                     listClassName="max-h-[40vh] overflow-auto"
                     cards={results}
                     savedCardIds={savedCardIds}
-                    emptyMessage="No cards found. Try a different keyword or issuer."
+                    emptyMessage="No results found."
                     onAdd={(card) => {
-                      void addCardFromSearch(card, "search");
+                      void addCardFromSearch(card);
                     }}
-                    isLoading={showLoading}
-                    error={error}
+                    isLoading={isCardsIndexLoading}
+                    error={cardsIndexError}
                     highlightedIndex={highlightedIndex}
                   />
                 </div>
@@ -833,107 +880,18 @@ export function WalletBuilder() {
                         listClassName="max-h-[24rem] overflow-auto"
                         cards={results}
                         savedCardIds={savedCardIds}
-                        emptyMessage="No cards found. Try a different keyword or issuer."
+                        emptyMessage="No results found."
                         onAdd={(card) => {
-                          void addCardFromSearch(card, "search");
+                          void addCardFromSearch(card);
                         }}
-                        isLoading={showLoading}
-                        error={error}
+                        isLoading={isCardsIndexLoading}
+                        error={cardsIndexError}
                         highlightedIndex={highlightedIndex}
                       />
                     </div>,
                     document.body,
                   )
                 : null}
-
-              <div
-                className={cn(
-                  "mt-5 transition-opacity transition-transform motion-safe:duration-200 ease-out",
-                  isSearching ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-white/60">
-                    <span className="font-semibold">Browse by issuer</span>
-                  </p>
-                  {isSearching ? <span className="text-xs text-white/55">Clear search to browse</span> : null}
-                </div>
-
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="issuer-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
-                      Issuer
-                    </label>
-                    <select
-                      id="issuer-select"
-                      value={activeIssuer}
-                      onChange={(event) => {
-                        const nextIssuer = event.target.value;
-                        setActiveIssuer(nextIssuer);
-                        if (nextIssuer === "") {
-                          setSelectedIssuerCardId("");
-                        }
-                      }}
-                      className={cn(
-                        controlClasses,
-                        "appearance-none",
-                        rowTransition,
-                        issuerHasValue ? "text-white/95" : "text-white/45",
-                      )}
-                    >
-                      <option value="">
-                        Select an issuer
-                      </option>
-                      {enabledIssuers.map((issuer) => (
-                        <option key={issuer.id} value={issuer.id}>
-                          {issuer.name}
-                        </option>
-                      ))}
-                      {comingSoonIssuers.map((issuer) => (
-                        <option key={issuer.id} value={issuer.id} disabled>
-                          {issuer.name} (Coming soon)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="issuer-card-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/50">
-                      Card
-                    </label>
-                    <select
-                      id="issuer-card-select"
-                      value={selectedIssuerCardId}
-                      onChange={(event) => handleIssuerCardSelect(event.target.value)}
-                      disabled={!issuerHasValue}
-                      className={cn(
-                        controlClasses,
-                        "appearance-none",
-                        rowTransition,
-                        !issuerHasValue && "cursor-not-allowed border-white/10 bg-white/5 opacity-50",
-                        cardHasValue ? "text-white/95" : "text-white/45",
-                      )}
-                    >
-                      <option value="" disabled>
-                        Select a card
-                      </option>
-                      {issuerCardOptions.map((card) => {
-                        const isSaved = savedCardIds.has(card.id);
-
-                        return (
-                          <option key={card.id} value={card.id} disabled={isSaved}>
-                            {getCleanCardName(card.display_name, card.card_name)}
-                            {isSaved ? " (Saved)" : ""}
-                          </option>
-                        );
-                      })}
-                    </select>
-
-                    {issuerCardLoading ? <p className="mt-2 text-xs text-white/60">Loading issuer cards…</p> : null}
-                    {issuerCardError ? <p className="mt-2 text-xs text-[#F7C948]">{issuerCardError}</p> : null}
-                  </div>
-                </div>
-              </div>
             </div>
           </Surface>
 
