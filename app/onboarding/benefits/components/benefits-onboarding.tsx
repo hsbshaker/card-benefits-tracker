@@ -156,6 +156,14 @@ function getEnrollmentUrl(benefitDisplayName: string) {
   return ENROLLMENT_URL_BY_BENEFIT_NAME[benefitDisplayName.trim().toLowerCase()] ?? null;
 }
 
+function getShortCardName(displayName: string, issuer: string) {
+  if (!displayName || !issuer) return displayName;
+  if (displayName.startsWith(issuer)) {
+    return displayName.replace(issuer, "").trim();
+  }
+  return displayName;
+}
+
 function describeSupabaseError(error: unknown) {
   const err = (error ?? {}) as SupabaseErrorLike;
   return {
@@ -437,6 +445,7 @@ const CardPanel = memo(function CardPanel({
   onToggleUsed,
   onRequestRemove,
 }: CardPanelProps) {
+  const shortCardName = useMemo(() => getShortCardName(card.cardName, card.issuer), [card.cardName, card.issuer]);
   const cadenceCountByType = useMemo(() => {
     const counts: Record<Cadence, number> = {
       monthly: 0,
@@ -518,19 +527,21 @@ const CardPanel = memo(function CardPanel({
           }}
           className="w-full px-4 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
-          <div className="flex w-full min-w-0 flex-col gap-1">
-            <p className="line-clamp-2 text-lg font-semibold leading-tight text-white md:line-clamp-1">{card.cardName}</p>
+          <div className="flex w-full min-w-0 flex-col gap-2">
+            <p className="line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
             <div className="flex items-center justify-between gap-3">
               <p className="min-w-0 flex-1 truncate text-sm text-white/60">
                 {card.issuer}
                 {card.network ? ` • ${card.network}` : ""}
               </p>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
+                <span className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/5 px-3 text-sm text-white/70">
+                  {card.benefits.length} Benefits
+                </span>
                 <button
                   type="button"
                   ref={kebabButtonRef}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
                   onClick={(event) => {
                     event.stopPropagation();
                     setIsMenuOpen((prev) => {
@@ -548,7 +559,7 @@ const CardPanel = memo(function CardPanel({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-base text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
                   onClick={(event) => {
                     event.stopPropagation();
                     onToggleExpand(card.cardId);
@@ -556,7 +567,7 @@ const CardPanel = memo(function CardPanel({
                   aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
                   aria-expanded={isExpanded}
                 >
-                  {isExpanded ? "−" : "+"}
+                  <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
                 </button>
               </div>
             </div>
