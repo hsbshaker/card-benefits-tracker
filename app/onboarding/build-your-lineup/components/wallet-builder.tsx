@@ -1197,15 +1197,15 @@ export function WalletBuilder() {
           ) : (
             <div className="relative max-h-[24rem] w-full min-w-0">
               <div ref={walletListRef} className="max-h-[24rem] overflow-y-auto pr-1" onScroll={updateWalletScrollCue}>
-                <ul className="space-y-2">
+                <ul className="divide-y divide-white/10">
                   {savedCards.map((card) => (
                     <li
                       key={card.instanceId}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-white/14 bg-white/9 px-3 py-2.5 transition motion-safe:duration-200 ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+                      className="flex items-center justify-between gap-3 px-4 py-4 transition-colors duration-150 hover:bg-white/5 sm:py-3 motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
                     >
                       <div className="min-w-0">
-                        <p className="truncate pr-2 text-sm font-medium text-white/90">{card.display_name ?? card.card_name}</p>
-                        <p className="mt-0.5 text-xs text-white/55">
+                        <p className="truncate pr-2 font-medium leading-tight text-white/90">{card.display_name ?? card.card_name}</p>
+                        <p className="mt-0.5 text-sm text-white/55">
                           {card.issuer}
                           {" • "}
                           {card.network ?? "N/A"}
@@ -1213,7 +1213,7 @@ export function WalletBuilder() {
                       </div>
                       <button
                         type="button"
-                        className="ml-auto inline-flex shrink-0 items-center justify-center rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 p-1.5 text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
+                        className="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-200 transition hover:bg-red-500/15 hover:text-red-100 sm:h-9 sm:w-9 disabled:cursor-not-allowed disabled:bg-red-500/6 disabled:text-red-200/55"
                         onClick={() => handleRequestRemove(card)}
                         aria-label={`Remove ${card.display_name ?? card.card_name} from wallet`}
                       >
