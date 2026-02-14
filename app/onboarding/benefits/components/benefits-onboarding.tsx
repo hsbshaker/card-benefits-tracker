@@ -276,18 +276,18 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
         onClick={handleToggleExpand}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "w-full pl-3 pr-2 py-3 text-left transition-colors",
+          "w-full px-4 py-3.5 text-left transition-colors",
           canExpand ? "cursor-pointer hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset" : "",
         )}
       >
         {isEnrollmentBenefit ? (
           <div className="grid grid-cols-[1fr_auto] items-center gap-3">
             <div className="min-w-0 flex flex-col gap-2">
-              <p className="min-w-0 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+              <p className="min-w-0 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
               {formattedAmount ? (
                 <span
                   className={cn(
-                    "inline-flex w-fit shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
+                    "inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-3 py-1 text-sm font-medium leading-none",
                     BENEFIT_AMOUNT_ACCENT_CLASS,
                   )}
                 >
@@ -330,11 +330,11 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           <div className="grid grid-cols-[1fr_auto] items-start gap-2">
             <div className="min-w-0 flex flex-col gap-2">
               <div className="flex min-w-0 items-center gap-1">
-                <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+                <p className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
                 {canExpand ? (
                   <button
                     type="button"
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
                     onClick={(event) => {
                       event.stopPropagation();
                       handleToggleExpand();
@@ -351,7 +351,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               {formattedAmount ? (
                 <span
                   className={cn(
-                    "inline-flex w-fit shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
+                    "inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-3 py-1 text-sm font-medium leading-none",
                     BENEFIT_AMOUNT_ACCENT_CLASS,
                   )}
                 >
