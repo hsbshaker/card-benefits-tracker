@@ -516,48 +516,50 @@ const CardPanel = memo(function CardPanel({
             event.preventDefault();
             onToggleExpand(card.cardId);
           }}
-          className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
+          className="w-full px-4 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
-          <div className="min-w-0">
-            <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
-            <p className="text-xs text-white/55">
-              {card.issuer}
-              {card.network ? ` • ${card.network}` : ""}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
-            <button
-              type="button"
-              ref={kebabButtonRef}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsMenuOpen((prev) => {
-                  const next = !prev;
-                  if (next) {
-                    requestAnimationFrame(() => updateMenuPosition());
-                  }
-                  return next;
-                });
-              }}
-              aria-label={`${isMenuOpen ? "Close" : "Open"} actions for ${card.cardName}`}
-              aria-expanded={isMenuOpen}
-            >
-              <KebabIcon className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-base text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleExpand(card.cardId);
-              }}
-              aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
-              aria-expanded={isExpanded}
-            >
-              {isExpanded ? "−" : "+"}
-            </button>
+          <div className="flex w-full min-w-0 flex-col gap-1">
+            <p className="line-clamp-2 text-lg font-semibold leading-tight text-white md:line-clamp-1">{card.cardName}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 flex-1 truncate text-sm text-white/60">
+                {card.issuer}
+                {card.network ? ` • ${card.network}` : ""}
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} Benefits</span>
+                <button
+                  type="button"
+                  ref={kebabButtonRef}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsMenuOpen((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        requestAnimationFrame(() => updateMenuPosition());
+                      }
+                      return next;
+                    });
+                  }}
+                  aria-label={`${isMenuOpen ? "Close" : "Open"} actions for ${card.cardName}`}
+                  aria-expanded={isMenuOpen}
+                >
+                  <KebabIcon className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-base text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleExpand(card.cardId);
+                  }}
+                  aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
+                  aria-expanded={isExpanded}
+                >
+                  {isExpanded ? "−" : "+"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
