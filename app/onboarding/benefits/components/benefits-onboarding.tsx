@@ -220,6 +220,15 @@ function KebabIcon({ className }: { className?: string }) {
   );
 }
 
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M7 13 13 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8.25 7H13v4.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 type BenefitItemProps = {
   benefit: BenefitRow;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
@@ -250,15 +259,6 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
       setIsExpanded((prev) => !prev);
     },
     [canExpand],
-  );
-
-  const handleOpenEnrollment = useCallback(
-    (event?: { stopPropagation?: () => void }) => {
-      event?.stopPropagation?.();
-      if (!enrollmentUrl) return;
-      window.open(enrollmentUrl, "_blank", "noopener,noreferrer");
-    },
-    [enrollmentUrl],
   );
 
   return (
@@ -297,7 +297,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               <button
                 type="button"
                 className={cn(
-                  "inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
+                  "inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
                   benefit.used
                     ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
                     : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
@@ -312,19 +312,21 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               </button>
             </div>
 
-            {benefit.used ? (
-              <span className="inline-flex h-10 shrink-0 items-center rounded-lg border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-white/45">
-                Enrolled
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-[#86EFAC]/35 bg-emerald-400/12 px-4 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                onClick={handleOpenEnrollment}
+            {!benefit.used ? (
+              <a
+                href={enrollmentUrl ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-10 shrink-0 self-center items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#86EFAC]/35 bg-emerald-400/12 px-4 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+                aria-label="Enroll now (opens external site)"
               >
-                Enroll Now
-              </button>
-            )}
+                <span>Enroll Now</span>
+                <ExternalLinkIcon className="h-4 w-4 shrink-0" />
+              </a>
+            ) : null}
           </div>
         ) : (
           <div className="grid grid-cols-[1fr_auto] items-start gap-2">
