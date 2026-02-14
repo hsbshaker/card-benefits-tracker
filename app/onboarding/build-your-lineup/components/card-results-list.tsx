@@ -13,7 +13,6 @@ export type CardResult = {
 type CardResultsListProps = {
   cards: CardResult[];
   savedCardIds: Set<string>;
-  pendingCardIds: Set<string>;
   onAdd: (card: CardResult) => void;
   emptyMessage?: string;
   isLoading?: boolean;
@@ -24,11 +23,26 @@ type CardResultsListProps = {
 };
 
 const rowTransition = "transition motion-safe:duration-200 ease-out";
+const issuerMap = { "American Express": "AMEX" } as const;
+
+function getCleanCardName(card: CardResult) {
+  let name = card.display_name ?? card.card_name;
+  if (name.startsWith("American Express ")) {
+    name = name.slice("American Express ".length);
+  }
+  if (name.endsWith(" Card")) {
+    name = name.slice(0, -" Card".length);
+  }
+  return name;
+}
+
+function getIssuerDisplayName(issuer: string) {
+  return issuerMap[issuer as keyof typeof issuerMap] ?? issuer;
+}
 
 export function CardResultsList({
   cards,
   savedCardIds,
-  pendingCardIds,
   onAdd,
   emptyMessage = "No cards found.",
   isLoading = false,
@@ -55,12 +69,11 @@ export function CardResultsList({
             {cards.map((card, index) => {
               const highlighted = highlightedIndex === index;
               const isSaved = savedCardIds.has(card.id);
-              const isPending = pendingCardIds.has(card.id);
-              const isUnavailable = isSaved || isPending;
-              const label = card.display_name ?? card.card_name;
+              const label = getCleanCardName(card);
+              const issuerLabel = getIssuerDisplayName(card.issuer);
 
               const handleRowClick = () => {
-                if (isUnavailable) return;
+                if (isSaved) return;
                 onAdd(card);
               };
 
@@ -68,11 +81,11 @@ export function CardResultsList({
                 <li key={`${card.id}-${index}`}>
                   <button
                     type="button"
-                    disabled={isUnavailable}
+                    disabled={isSaved}
                     onClick={handleRowClick}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm transition-all duration-150",
-                      isUnavailable
+                      isSaved
                         ? "cursor-not-allowed opacity-60"
                         : cn(
                             rowTransition,
@@ -85,9 +98,9 @@ export function CardResultsList({
                   >
                     <div className="min-w-0">
                       <p className="truncate">{label}</p>
-                      <p className="mt-0.5 text-xs text-white/55">{card.issuer}</p>
+                      <p className="mt-0.5 text-xs text-white/55">{issuerLabel}</p>
                     </div>
-                    {isUnavailable ? <span className="shrink-0 text-xs text-white/55">Saved</span> : null}
+                    {isSaved ? <span className="shrink-0 text-xs text-white/55">Saved</span> : null}
                   </button>
                 </li>
               );
