@@ -28,11 +28,7 @@ type BaseCardInstance = {
   network: string | null;
 };
 
-type PersistedCardInstance = BaseCardInstance & {
-  isPersisted: true;
-};
-
-export type SelectedCardInstance = PersistedCardInstance;
+export type SelectedCardInstance = BaseCardInstance;
 
 type WalletCard = {
   id: string;
@@ -105,7 +101,7 @@ export function WalletBuilder() {
   const [isWalletLoading, setIsWalletLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(false);
-  const [removeTargetCard, setRemoveTargetCard] = useState<PersistedCardInstance | null>(null);
+  const [removeTargetCard, setRemoveTargetCard] = useState<BaseCardInstance | null>(null);
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
   const [showAddedToast, setShowAddedToast] = useState(false);
@@ -192,7 +188,7 @@ export function WalletBuilder() {
 
     const walletCards: WalletCard[] = walletRows.flatMap((row) => row.cards ?? []).filter(Boolean);
 
-    const persistedCards: PersistedCardInstance[] = walletCards.map((card) => ({
+    const persistedCards: BaseCardInstance[] = walletCards.map((card) => ({
       instanceId: `persisted-${card.id}`,
       cardId: card.id,
       product_key: card.product_key,
@@ -200,7 +196,6 @@ export function WalletBuilder() {
       display_name: card.display_name,
       issuer: card.issuer,
       network: card.network,
-      isPersisted: true,
     }));
 
     setSelectedCards(persistedCards);
@@ -328,8 +323,7 @@ export function WalletBuilder() {
             display_name: card.display_name,
             issuer: card.issuer,
             network: card.network,
-            isPersisted: true,
-          } satisfies PersistedCardInstance,
+          } satisfies BaseCardInstance,
         ];
       });
 
@@ -349,7 +343,6 @@ export function WalletBuilder() {
         display_name: card.display_name,
         issuer: card.issuer,
         network: card.network,
-        isPersisted: true,
       });
 
       if (!resolved?.id) {
@@ -632,7 +625,7 @@ export function WalletBuilder() {
   };
 
   const handleRequestRemove = useCallback(
-    (card: PersistedCardInstance) => {
+    (card: BaseCardInstance) => {
       if (isRemovingCard) return;
       setRemoveTargetCard(card);
       setRemoveCardError(null);
