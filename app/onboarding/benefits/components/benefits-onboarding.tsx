@@ -536,9 +536,9 @@ const CardPanel = memo(function CardPanel({
         >
           <div className="min-w-0 flex flex-col gap-1">
             <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
-            <p className="min-w-0 text-sm leading-snug text-white/60">{`${issuerShortLabel} | ${card.benefits.length} Benefits`}</p>
+            <p className="min-w-0 truncate text-sm leading-snug text-white/55">{`${issuerShortLabel} • ${card.benefits.length} benefits`}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               ref={kebabButtonRef}
