@@ -324,6 +324,46 @@ export function WalletBuilder() {
     }, 2400);
   }, []);
 
+  const resolveCanonicalCard = useCallback(
+    async (selected: SelectedCardInstance): Promise<{ id: string; product_key: string | null } | null> => {
+      if (selected.product_key) {
+        const { data, error } = await supabase
+          .from("cards")
+          .select("id, product_key")
+          .eq("product_key", selected.product_key)
+          .order("id", { ascending: true })
+          .limit(1);
+
+        if (error) {
+          console.error("Failed to resolve card by product_key", error);
+          return { id: selected.cardId, product_key: selected.product_key };
+        }
+
+        const canonicalCard = data?.[0];
+        if (canonicalCard?.id) {
+          return { id: canonicalCard.id, product_key: canonicalCard.product_key };
+        }
+
+        return { id: selected.cardId, product_key: selected.product_key };
+      }
+
+      return { id: selected.cardId, product_key: selected.product_key };
+    },
+    [supabase],
+  );
+
+  const addCardToWallet = useCallback(
+    async (userId: string, cardId: string) =>
+      supabase.from("user_cards").upsert(
+        {
+          user_id: userId,
+          card_id: cardId,
+        },
+        { onConflict: "user_id,card_id", ignoreDuplicates: true },
+      ),
+    [supabase],
+  );
+
   const addCardFromSearch = useCallback(
     async (card: CardResult) => {
       if (walletCardIds.has(card.id)) return;
@@ -665,46 +705,6 @@ export function WalletBuilder() {
     addCard(nextCard);
     setSelectedIssuerCardId("");
   };
-
-  const resolveCanonicalCard = useCallback(
-    async (selected: SelectedCardInstance): Promise<{ id: string; product_key: string | null } | null> => {
-      if (selected.product_key) {
-        const { data, error } = await supabase
-          .from("cards")
-          .select("id, product_key")
-          .eq("product_key", selected.product_key)
-          .order("id", { ascending: true })
-          .limit(1);
-
-        if (error) {
-          console.error("Failed to resolve card by product_key", error);
-          return { id: selected.cardId, product_key: selected.product_key };
-        }
-
-        const canonicalCard = data?.[0];
-        if (canonicalCard?.id) {
-          return { id: canonicalCard.id, product_key: canonicalCard.product_key };
-        }
-
-        return { id: selected.cardId, product_key: selected.product_key };
-      }
-
-      return { id: selected.cardId, product_key: selected.product_key };
-    },
-    [supabase],
-  );
-
-  const addCardToWallet = useCallback(
-    async (userId: string, cardId: string) =>
-      supabase.from("user_cards").upsert(
-        {
-          user_id: userId,
-          card_id: cardId,
-        },
-        { onConflict: "user_id,card_id", ignoreDuplicates: true },
-      ),
-    [supabase],
-  );
 
   const handleRequestRemove = useCallback(
     (card: PersistedCardInstance) => {
