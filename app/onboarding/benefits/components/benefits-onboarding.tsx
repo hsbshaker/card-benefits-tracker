@@ -282,30 +282,31 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
           canExpand ? "cursor-pointer hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]" : "",
         )}
       >
-        <div className="grid grid-cols-[1fr_auto_auto] items-start gap-3">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-3">
           <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
-              {formattedAmount ? (
+            <p className="min-w-0 truncate text-sm font-medium leading-5 text-white/95">{benefit.display_name}</p>
+
+            {formattedAmount ? (
+              <div className="mt-1 flex items-center">
                 <span
                   className={cn(
-                    "inline-flex shrink-0 rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+                    "inline-flex shrink-0 whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-2 py-0.5 text-xs font-medium",
                     BENEFIT_AMOUNT_ACCENT_CLASS,
                   )}
                 >
                   {formattedAmount}
                 </span>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             {previewText ? (
-              <div className="mt-0.5">
+              <div className="mt-1">
                 <p className="text-xs leading-4 text-white/65">{previewText}</p>
               </div>
             ) : null}
           </div>
 
-          <div className="shrink-0">
+          <div className="mt-6 flex shrink-0 items-center gap-1">
             <button
               type="button"
               className={cn(
@@ -331,11 +332,8 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
                   : `Toggle reminder for ${benefit.display_name}`
               }
             >
-              {!isEnrollmentBenefit ? <BellToggleIcon className="h-4 w-4 shrink-0" active={benefit.remind_me} /> : "Go"}
+              {!isEnrollmentBenefit ? <BellToggleIcon className="h-[18px] w-[18px] shrink-0" active={benefit.remind_me} /> : "Go"}
             </button>
-          </div>
-
-          <div className="shrink-0">
             {canExpand ? (
               <button
                 type="button"
