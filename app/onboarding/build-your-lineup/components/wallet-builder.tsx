@@ -109,6 +109,7 @@ export function WalletBuilder() {
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
   const [showAddedToast, setShowAddedToast] = useState(false);
+  const [enteringCardIds, setEnteringCardIds] = useState<Set<string>>(new Set());
   const [showWalletScrollCue, setShowWalletScrollCue] = useState(false);
 
   const requestAbortRef = useRef<AbortController | null>(null);
@@ -121,6 +122,8 @@ export function WalletBuilder() {
   const walletListRef = useRef<HTMLDivElement | null>(null);
   const loadingDelayRef = useRef<number | null>(null);
   const addToastTimerRef = useRef<number | null>(null);
+  const enterTimersRef = useRef<number[]>([]);
+  const enterAnimationFramesRef = useRef<number[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [resultsOverlayStyle, setResultsOverlayStyle] = useState<{
     top: number;
@@ -266,7 +269,45 @@ export function WalletBuilder() {
         window.clearTimeout(addToastTimerRef.current);
         addToastTimerRef.current = null;
       }
+      for (const timeoutId of enterTimersRef.current) {
+        window.clearTimeout(timeoutId);
+      }
+      enterTimersRef.current = [];
+      for (const frameId of enterAnimationFramesRef.current) {
+        window.cancelAnimationFrame(frameId);
+      }
+      enterAnimationFramesRef.current = [];
     };
+  }, []);
+
+  const markCardForFadeIn = useCallback((cardId: string) => {
+    setEnteringCardIds((prev) => {
+      const next = new Set(prev);
+      next.add(cardId);
+      return next;
+    });
+
+    const frameId = window.requestAnimationFrame(() => {
+      setEnteringCardIds((prev) => {
+        if (!prev.has(cardId)) return prev;
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+      enterAnimationFramesRef.current = enterAnimationFramesRef.current.filter((id) => id !== frameId);
+    });
+    enterAnimationFramesRef.current.push(frameId);
+
+    const timeoutId = window.setTimeout(() => {
+      setEnteringCardIds((prev) => {
+        if (!prev.has(cardId)) return prev;
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+      enterTimersRef.current = enterTimersRef.current.filter((id) => id !== timeoutId);
+    }, 350);
+    enterTimersRef.current.push(timeoutId);
   }, []);
 
   const showAddedConfirmation = useCallback(() => {
@@ -347,6 +388,7 @@ export function WalletBuilder() {
 
         return next;
       });
+      markCardForFadeIn(card.id);
 
       resetSearchUI({ focus: true });
       showAddedConfirmation();
@@ -396,6 +438,7 @@ export function WalletBuilder() {
       resolveCanonicalCard,
       resetSearchUI,
       showAddedConfirmation,
+      markCardForFadeIn,
       supabase,
       userId,
       walletCardIds,
@@ -914,13 +957,20 @@ export function WalletBuilder() {
           ) : savedCards.length === 0 ? (
             <p className="py-10 text-center text-sm text-white/45">Your lineup starts here.</p>
           ) : (
-            <div className="relative max-h-[24rem] w-full min-w-0">
-              <div ref={walletListRef} className="max-h-[24rem] overflow-y-auto pr-1" onScroll={updateWalletScrollCue}>
+            <div className="relative w-full min-w-0">
+              <div
+                ref={walletListRef}
+                className="max-h-[45vh] overflow-y-auto pr-1 sm:max-h-[360px] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent"
+                onScroll={updateWalletScrollCue}
+              >
                 <ul className="divide-y divide-white/10">
                   {savedCards.map((card) => (
                     <li
                       key={card.cardId}
-                      className="flex items-center justify-between gap-3 px-4 py-4 sm:py-3 motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0"
+                      className={cn(
+                        "flex items-center justify-between gap-3 px-4 py-4 transition-opacity duration-200 sm:py-3",
+                        enteringCardIds.has(card.cardId) ? "opacity-0" : "opacity-100",
+                      )}
                     >
                       <div className="min-w-0">
                         <p className="truncate pr-2 font-medium leading-tight text-white/90">
