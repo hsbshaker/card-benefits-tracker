@@ -769,8 +769,8 @@ export function WalletBuilder() {
   };
 
   return (
-    <AppShell containerClassName="py-8 sm:py-10">
-      <div className="mb-6">
+    <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="py-8 sm:py-10">
+      <div className="mb-6 min-w-0">
         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 1 of 2 · Wallet Setup</p>
         <div className="mt-2 flex items-start gap-3">
           <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
@@ -793,15 +793,15 @@ export function WalletBuilder() {
         />
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-6 pb-32 md:pb-0">
         <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Surface as="section" className="relative z-30 overflow-visible p-4 sm:p-5">
-            <div ref={searchAreaRef}>
+          <Surface as="section" className="relative z-30 w-full min-w-0 overflow-visible p-4 sm:p-5">
+            <div ref={searchAreaRef} className="min-w-0">
               <label htmlFor="card-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/60">
                 <span className="font-semibold">Search cards</span>
               </label>
-              <div className="relative z-20">
-                <div ref={searchInputWrapRef} className="relative">
+              <div className="relative z-20 min-w-0">
+                <div ref={searchInputWrapRef} className="relative min-w-0">
                   <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40" aria-hidden>
                     <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
                       <circle cx="8.5" cy="8.5" r="5.5" />
@@ -820,16 +820,40 @@ export function WalletBuilder() {
                     onKeyDown={handleResultsKeyDown}
                     placeholder="Search by credit card (e.g., Sapphire, Platinum)"
                     autoComplete="off"
-                    className={cn(controlClasses, "pl-9 text-white/95", rowTransition)}
+                    className={cn(controlClasses, "min-w-0 pl-9 text-white/95", rowTransition)}
                   />
                 </div>
               </div>
+
+              {shouldShowResults ? (
+                <div className="mt-3 w-full min-w-0 md:hidden">
+                  <CardResultsList
+                    className={cn(
+                      "w-full rounded-2xl border border-white/10 bg-slate-950/85 ring-1 ring-white/5 shadow-2xl shadow-[0_25px_60px_-20px_rgba(0,0,0,0.85)] backdrop-blur-md",
+                      showLoading || error || results.length > 0
+                        ? "translate-y-0 opacity-100"
+                        : "pointer-events-none -translate-y-1 opacity-0",
+                    )}
+                    listClassName="max-h-[40vh] overflow-auto"
+                    cards={results}
+                    savedCardIds={savedCardIds}
+                    pendingCardIds={pendingCardIds}
+                    onAdd={(card) => {
+                      addCard(card);
+                      resetSearchUI({ focus: true });
+                    }}
+                    isLoading={showLoading}
+                    error={error}
+                    highlightedIndex={highlightedIndex}
+                  />
+                </div>
+              ) : null}
 
               {isClient && shouldShowResults && resultsOverlayStyle
                 ? createPortal(
                     <div
                       ref={resultsOverlayRef}
-                      className="pointer-events-auto fixed z-[100]"
+                      className="pointer-events-auto fixed z-[100] hidden md:block"
                       style={{
                         top: resultsOverlayStyle.top,
                         left: resultsOverlayStyle.left,
@@ -843,6 +867,7 @@ export function WalletBuilder() {
                             ? "translate-y-0 opacity-100"
                             : "pointer-events-none -translate-y-1 opacity-0",
                         )}
+                        listClassName="max-h-[24rem] overflow-auto"
                         cards={results}
                         savedCardIds={savedCardIds}
                         pendingCardIds={pendingCardIds}
@@ -952,9 +977,9 @@ export function WalletBuilder() {
             </div>
           </Surface>
 
-          <Surface as="aside" className="flex flex-col p-4 sm:p-5">
+          <Surface as="aside" className="flex w-full min-w-0 flex-col p-4 sm:p-5">
             <div className="mb-3">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col items-start gap-3 md:flex-row md:items-start md:justify-between">
                 <p className="text-xs font-medium uppercase tracking-wide text-white/60">
                   <span className="font-semibold">Pending</span> ({pendingCards.length})
                 </p>
@@ -962,7 +987,7 @@ export function WalletBuilder() {
                   type="button"
                   disabled={pendingCards.length === 0 || isSaving}
                   onClick={handleContinue}
-                  className="ml-auto shrink-0 rounded-lg border border-[#7FD9A8]/30 bg-[#2E7D57]/20 px-3 py-1.5 text-xs font-medium text-[#BFF3D6] transition-colors hover:border-[#8EE3B4]/45 hover:bg-[#2E7D57]/35 disabled:cursor-not-allowed disabled:border-white/12 disabled:bg-white/8 disabled:text-white/40"
+                  className="w-full rounded-lg border border-[#7FD9A8]/30 bg-[#2E7D57]/20 px-3 py-1.5 text-xs font-medium text-[#BFF3D6] transition-colors hover:border-[#8EE3B4]/45 hover:bg-[#2E7D57]/35 disabled:cursor-not-allowed disabled:border-white/12 disabled:bg-white/8 disabled:text-white/40 md:ml-auto md:w-auto md:shrink-0"
                 >
                   {isSaving
                     ? "Adding..."
@@ -973,7 +998,7 @@ export function WalletBuilder() {
 
             {pendingActionError ? <p className="mb-2 text-xs text-[#F4B4B4]">{pendingActionError}</p> : null}
 
-            <div className="relative mt-2 h-[8.5rem]">
+            <div className="relative mt-2 h-[8.5rem] w-full min-w-0">
               <div ref={pendingListRef} className="h-full overflow-y-auto pr-1" onScroll={updatePendingScrollCue}>
                 {pendingCards.length === 0 ? (
                   <div className="flex h-full items-center justify-center px-3 py-4">
@@ -1035,7 +1060,7 @@ export function WalletBuilder() {
           </Surface>
         </div>
 
-        <Surface as="section" className="border-white/18 bg-white/10 p-5 sm:p-6">
+        <Surface as="section" className="w-full min-w-0 border-white/18 bg-white/10 p-5 sm:p-6">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-white/60">
@@ -1049,7 +1074,7 @@ export function WalletBuilder() {
           ) : savedCards.length === 0 ? (
             <p className="py-10 text-center text-sm text-white/45">Your lineup starts here.</p>
           ) : (
-            <div className="relative max-h-[24rem]">
+            <div className="relative max-h-[24rem] w-full min-w-0">
               <div ref={walletListRef} className="max-h-[24rem] overflow-y-auto pr-1" onScroll={updateWalletScrollCue}>
                 <ul className="space-y-2">
                   {savedCards.map((card) => (
@@ -1097,13 +1122,27 @@ export function WalletBuilder() {
             </div>
           )}
         </Surface>
-        <div className="flex justify-end">
+        <div className="hidden justify-end md:flex">
           <Button
             type="button"
             size="sm"
             onClick={() => router.push("/onboarding/benefits")}
             disabled={savedCards.length === 0}
             className="rounded-lg px-3 text-sm"
+          >
+            Personalize Your Benefits →
+          </Button>
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-6 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+        <div className="mx-auto w-full max-w-6xl">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => router.push("/onboarding/benefits")}
+            disabled={savedCards.length === 0}
+            className="w-full rounded-lg px-3 text-sm"
           >
             Personalize Your Benefits →
           </Button>

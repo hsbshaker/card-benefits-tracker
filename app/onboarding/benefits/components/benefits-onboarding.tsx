@@ -375,14 +375,14 @@ const CardPanel = memo(function CardPanel({
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/5"
         onClick={() => onToggleExpand(card.cardId)}
       >
-        <div>
-          <p className="text-base font-semibold text-white">{card.cardName}</p>
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
           <p className="text-xs text-white/55">
             {card.issuer}
             {card.network ? ` • ${card.network}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <span className="rounded-full border border-white/15 bg-white/8 px-2.5 py-1 text-xs text-white/75">{card.benefits.length} benefits</span>
           <span className="text-sm text-white/65">{isExpanded ? "−" : "+"}</span>
         </div>
@@ -391,38 +391,48 @@ const CardPanel = memo(function CardPanel({
       {isExpanded ? (
         <div className="space-y-4 border-t border-white/10 px-5 py-4">
           <div className="rounded-xl border border-white/10 bg-white/5 p-1">
-            <div className="flex min-w-full items-center gap-2">
-              <div className="min-w-0 flex-1 overflow-x-auto">
-                <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex gap-1">
-                  {CADENCE_ORDER.map((cadence) => {
-                    const count = cadenceCountByType[cadence];
-                    const isActive = cadence === activeCadence;
-                    return (
-                      <button
-                        key={cadence}
-                        id={`tab-${card.cardId}-${cadence}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        aria-controls={`panel-${card.cardId}-${cadence}`}
-                        tabIndex={isActive ? 0 : -1}
-                        className={cn(
-                          "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                          isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
-                        )}
-                        onClick={() => onCadenceChange(card.cardId, cadence)}
-                        onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
-                      >
-                        {formatCadenceLabel(cadence)} ({count})
-                      </button>
-                    );
-                  })}
+            <div className="space-y-2 md:space-y-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1">
+                    {CADENCE_ORDER.map((cadence) => {
+                      const count = cadenceCountByType[cadence];
+                      const isActive = cadence === activeCadence;
+                      return (
+                        <button
+                          key={cadence}
+                          id={`tab-${card.cardId}-${cadence}`}
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          aria-controls={`panel-${card.cardId}-${cadence}`}
+                          tabIndex={isActive ? 0 : -1}
+                          className={cn(
+                            "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                            isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
+                          )}
+                          onClick={() => onCadenceChange(card.cardId, cadence)}
+                          onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
+                        >
+                          {formatCadenceLabel(cadence)} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="ml-auto hidden shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:inline-flex"
+                  onClick={() => onRequestRemove(card)}
+                >
+                  Remove From Wallet
+                </button>
               </div>
 
               <button
                 type="button"
-                className="ml-auto shrink-0 rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55"
+                className="w-full rounded-lg border border-[#E87979]/30 bg-[#B04646]/20 px-3 py-1.5 text-xs font-medium text-[#F7C5C5] transition-colors hover:border-[#F08A8A]/40 hover:bg-[#B04646]/35 disabled:cursor-not-allowed disabled:border-[#E87979]/15 disabled:bg-[#B04646]/10 disabled:text-[#F7C5C5]/55 md:hidden"
                 onClick={() => onRequestRemove(card)}
               >
                 Remove From Wallet
@@ -1012,9 +1022,9 @@ export function BenefitsOnboarding() {
   }
 
   return (
-    <AppShell containerClassName="py-8 sm:py-10">
-      <div className="w-full">
-        <div className="mb-6">
+    <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="py-8 sm:py-10">
+      <div className="w-full min-w-0">
+        <div className="mb-6 min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
           <div className="mt-2 flex items-start gap-3">
             <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
@@ -1040,7 +1050,7 @@ export function BenefitsOnboarding() {
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 pb-28 md:pb-0">
           {cards.length === 0 ? (
             <Surface className="p-6">
               <p className="text-sm text-white/75">No cards in your wallet yet. Add cards first to configure benefits.</p>
@@ -1073,13 +1083,21 @@ export function BenefitsOnboarding() {
 
           {completeError ? <p className="text-right text-xs text-[#F4B4B4]">{completeError}</p> : null}
 
-          <div className="sticky bottom-3 z-30 flex items-center justify-end">
+          <div className="sticky bottom-3 z-30 hidden items-center justify-end md:flex">
             <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting}>
               {isCompleting ? "Saving..." : "Complete"}
             </Button>
           </div>
 
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-6 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+        <div className="mx-auto w-full max-w-6xl">
+          <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting} className="w-full">
+            {isCompleting ? "Saving..." : "Complete"}
+          </Button>
         </div>
       </div>
 
