@@ -164,6 +164,12 @@ function getShortCardName(displayName: string, issuer: string) {
   return displayName;
 }
 
+function getIssuerShortLabel(issuer: string) {
+  const value = (issuer || "").toLowerCase();
+  if (value.includes("american express")) return "AMEX";
+  return issuer;
+}
+
 function describeSupabaseError(error: unknown) {
   const err = (error ?? {}) as SupabaseErrorLike;
   return {
@@ -446,6 +452,7 @@ const CardPanel = memo(function CardPanel({
   onRequestRemove,
 }: CardPanelProps) {
   const shortCardName = useMemo(() => getShortCardName(card.cardName, card.issuer), [card.cardName, card.issuer]);
+  const issuerShortLabel = useMemo(() => getIssuerShortLabel(card.issuer), [card.issuer]);
   const cadenceCountByType = useMemo(() => {
     const counts: Record<Cadence, number> = {
       monthly: 0,
@@ -530,13 +537,11 @@ const CardPanel = memo(function CardPanel({
           <div className="flex w-full min-w-0 flex-col gap-2">
             <p className="line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
             <div className="flex items-center justify-between gap-3">
-              <p className="min-w-0 flex-1 truncate text-sm text-white/60">
-                {card.issuer}
-                {card.network ? ` • ${card.network}` : ""}
-              </p>
+              <p className="min-w-0 flex-1 text-sm text-white/60">{issuerShortLabel}</p>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/5 px-3 text-sm text-white/70">
-                  {card.benefits.length} Benefits
+                <span className="flex flex-col items-center justify-center leading-none px-2" aria-label={`${card.benefits.length} benefits`} title="Benefits">
+                  <span className="text-sm font-semibold text-white/80">{card.benefits.length}</span>
+                  <span className="-mt-0.5 text-[10px] text-white/50">Benefits</span>
                 </span>
                 <button
                   type="button"
