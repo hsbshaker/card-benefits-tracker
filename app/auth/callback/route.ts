@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const origin = request.nextUrl.origin;
   const pathname = request.nextUrl.pathname;
+  console.log("oauth callback hit, has code:", Boolean(code));
 
   if (!code) {
     console.error("Auth callback missing code", {
@@ -23,12 +24,14 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
       console.error("Auth callback exchange failed", {
         origin,
         pathname,
         hasCode: true,
         message: error.message,
         status: error.status,
+        code,
       });
       return NextResponse.redirect(new URL(ERROR_REDIRECT, origin));
     }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Surface } from "@/components/ui/Surface";
-import { createClient } from "@/utils/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type AuthUserLike = {
   email?: string | null;
@@ -57,7 +57,7 @@ function SmallCheckIcon() {
 }
 
 export default async function OnboardingSuccessPage() {
-  const supabase = await createClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
     error,

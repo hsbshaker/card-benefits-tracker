@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const escapeIlikeValue = (value: string) => value.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
 
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const issuer = issuerMap[issuerParam] ?? issuerParam;
 
-  const supabase = await createClient();
+  const supabase = await createSupabaseServerClient();
 
   const {
     data: { user },
