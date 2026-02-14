@@ -532,46 +532,44 @@ const CardPanel = memo(function CardPanel({
             event.preventDefault();
             onToggleExpand(card.cardId);
           }}
-          className="w-full px-4 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
+          className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 pt-3 pb-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
-          <div className="flex w-full min-w-0 flex-col gap-1">
-            <div className="flex items-center justify-between gap-3">
-              <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  ref={kebabButtonRef}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setIsMenuOpen((prev) => {
-                      const next = !prev;
-                      if (next) {
-                        requestAnimationFrame(() => updateMenuPosition());
-                      }
-                      return next;
-                    });
-                  }}
-                  aria-label={`${isMenuOpen ? "Close" : "Open"} actions for ${card.cardName}`}
-                  aria-expanded={isMenuOpen}
-                >
-                  <KebabIcon className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onToggleExpand(card.cardId);
-                  }}
-                  aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
-                  aria-expanded={isExpanded}
-                  >
-                  <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
-                </button>
-              </div>
-            </div>
+          <div className="min-w-0 flex flex-col gap-1">
+            <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{shortCardName}</p>
             <p className="min-w-0 text-sm leading-snug text-white/60">{issuerShortLabel}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              ref={kebabButtonRef}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsMenuOpen((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    requestAnimationFrame(() => updateMenuPosition());
+                  }
+                  return next;
+                });
+              }}
+              aria-label={`${isMenuOpen ? "Close" : "Open"} actions for ${card.cardName}`}
+              aria-expanded={isMenuOpen}
+            >
+              <KebabIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleExpand(card.cardId);
+              }}
+              aria-label={isExpanded ? `Collapse ${card.cardName}` : `Expand ${card.cardName}`}
+              aria-expanded={isExpanded}
+            >
+              <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
+            </button>
           </div>
         </div>
 
