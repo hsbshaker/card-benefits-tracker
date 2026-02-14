@@ -39,7 +39,7 @@ type WalletCard = {
 
 type WalletCardRow = {
   card_id: string;
-  cards: WalletCard | null;
+  cards: WalletCard[] | null;
 };
 
 const ISSUER_OPTIONS: IssuerOption[] = [
@@ -193,7 +193,7 @@ export function WalletBuilder() {
       const walletRows: WalletCardRow[] = data ?? [];
 
       const walletCards: WalletCard[] = walletRows
-        .map((row) => row.cards)
+        .flatMap((row) => row.cards ?? [])
         .filter(
           (card): card is WalletCard =>
             Boolean(card) &&
