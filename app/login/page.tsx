@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { Button } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   const [envError, setEnvError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const shouldShowEnvBanner =
     process.env.NODE_ENV !== "production" ||
     (process.env.NEXT_PUBLIC_VERCEL_ENV != null && process.env.NEXT_PUBLIC_VERCEL_ENV !== "production");
@@ -25,15 +26,19 @@ export default function LoginPage() {
   }, [nextPublicSupabaseAnonKey, nextPublicSupabaseUrl]);
 
   const signInWithGoogle = useCallback(async () => {
+    if (isSigningIn) return;
+
     let supabase;
     try {
       supabase = getBrowserSupabaseClient();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
-      throw new Error(message);
+      setEnvError(message);
+      return;
     }
 
     if (!supabase) return;
+    setIsSigningIn(true);
 
     const origin =
       typeof window !== "undefined"
@@ -59,29 +64,10 @@ export default function LoginPage() {
     });
 
     if (error) {
-      throw new Error(error.message);
+      setEnvError(error.message);
+      setIsSigningIn(false);
     }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const run = async () => {
-      try {
-        await signInWithGoogle();
-      } catch (error) {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Missing Supabase browser environment variables.";
-        setEnvError(message);
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [signInWithGoogle]);
+  }, [isSigningIn]);
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
@@ -89,7 +75,10 @@ export default function LoginPage() {
         {shouldShowEnvBanner && envError ? (
           <p className="rounded-lg border border-amber-400/40 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">Env warning: {envError}</p>
         ) : null}
-        <p className="text-sm text-gray-600">Redirecting to Google sign-in...</p>
+        <p className="text-sm text-gray-600">Sign in to continue.</p>
+        <Button onClick={() => void signInWithGoogle()} disabled={isSigningIn} size="md">
+          {isSigningIn ? "Redirecting to Google..." : "Continue with Google"}
+        </Button>
       </div>
     </main>
   );

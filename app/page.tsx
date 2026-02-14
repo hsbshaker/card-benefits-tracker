@@ -72,6 +72,8 @@ export default function LandingPage() {
   }, []);
 
   async function signInWithGoogle() {
+    if (isSigningIn) return;
+
     let supabase;
     try {
       supabase = getBrowserSupabaseClient();

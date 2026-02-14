@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const next = "/onboarding/benefits";
   const origin = request.nextUrl.origin || getSiteURL();
 
-  const errorRedirect = NextResponse.redirect(new URL("/login", origin));
+  const errorRedirect = NextResponse.redirect(new URL("/auth/error?reason=oauth_callback_failed", origin));
 
   if (!code) {
     console.error("Auth callback missing code parameter", {
@@ -32,6 +32,10 @@ export async function GET(request: NextRequest) {
     });
     return errorRedirect;
   }
+  console.info("Auth callback received code parameter", {
+    pathname: url.pathname,
+    hasCode: true,
+  });
 
   try {
     const supabase = await createClient();
@@ -47,6 +51,9 @@ export async function GET(request: NextRequest) {
       });
       return errorRedirect;
     }
+    console.info("Auth callback exchanged code for session successfully", {
+      pathname: url.pathname,
+    });
   } catch (error: unknown) {
     const hint = hasHint(error) ? error.hint : undefined;
     const code = hasCode(error) ? error.code : undefined;
