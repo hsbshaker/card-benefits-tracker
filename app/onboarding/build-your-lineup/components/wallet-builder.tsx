@@ -17,7 +17,7 @@ type IssuerOption = {
   kind: "issuer";
 };
 
-type SelectedCardInstance = {
+type BaseCardInstance = {
   instanceId: string;
   cardId: string;
   product_key: string | null;
@@ -25,8 +25,17 @@ type SelectedCardInstance = {
   display_name: string | null;
   issuer: string;
   network: string | null;
-  isPersisted: boolean;
 };
+
+type PersistedCardInstance = BaseCardInstance & {
+  isPersisted: true;
+};
+
+type PendingCardInstance = BaseCardInstance & {
+  isPersisted: false;
+};
+
+export type SelectedCardInstance = PersistedCardInstance | PendingCardInstance;
 
 type WalletCard = {
   id: string;
@@ -72,7 +81,7 @@ export function WalletBuilder() {
   const [isWalletLoading, setIsWalletLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(false);
-  const [removeTargetCard, setRemoveTargetCard] = useState<SelectedCardInstance | null>(null);
+  const [removeTargetCard, setRemoveTargetCard] = useState<PersistedCardInstance | null>(null);
   const [removeCardError, setRemoveCardError] = useState<string | null>(null);
   const [isRemovingCard, setIsRemovingCard] = useState(false);
   const [pendingActionError, setPendingActionError] = useState<string | null>(null);
@@ -103,18 +112,30 @@ export function WalletBuilder() {
   const enabledIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && option.enabled);
   const comingSoonIssuers = ISSUER_OPTIONS.filter((option) => option.kind === "issuer" && !option.enabled);
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
+  const savedCards = useMemo(() => {
+    const persisted: PersistedCardInstance[] = [];
+    for (const card of selectedCards) {
+      if (card.isPersisted) persisted.push(card);
+    }
+    return persisted;
+  }, [selectedCards]);
+  const pendingCards = useMemo(() => {
+    const pending: PendingCardInstance[] = [];
+    for (const card of selectedCards) {
+      if (!card.isPersisted) pending.push(card);
+    }
+    return pending;
+  }, [selectedCards]);
   const savedCardIds = useMemo(
-    () => new Set(selectedCards.filter((selected) => selected.isPersisted).map((selected) => selected.cardId)),
-    [selectedCards],
+    () => new Set(savedCards.map((selected) => selected.cardId)),
+    [savedCards],
   );
   const pendingCardIds = useMemo(
-    () => new Set(selectedCards.filter((selected) => !selected.isPersisted).map((selected) => selected.cardId)),
-    [selectedCards],
+    () => new Set(pendingCards.map((selected) => selected.cardId)),
+    [pendingCards],
   );
   const issuerHasValue = activeIssuer !== "";
   const cardHasValue = Boolean(selectedIssuerCardId);
-  const savedCards = useMemo(() => selectedCards.filter((card) => card.isPersisted), [selectedCards]);
-  const pendingCards = useMemo(() => selectedCards.filter((card) => !card.isPersisted), [selectedCards]);
 
   const addCardInstance = (card: CardResult) => {
     const instanceId =
@@ -192,20 +213,17 @@ export function WalletBuilder() {
 
       const walletRows: WalletCardRow[] = data ?? [];
 
-      const walletCards: WalletCard[] = walletRows
-        .flatMap((row) => row.cards ?? [])
-        .filter(
-          (card): card is WalletCard =>
-            Boolean(card) &&
-            typeof card.id === "string" &&
-            typeof card.card_name === "string" &&
-            typeof card.issuer === "string",
-        );
+      const walletCards: WalletCard[] = walletRows.flatMap((row) => row.cards ?? []).filter(Boolean);
 
       setSelectedCards((prev) => {
-        const nextPendingCards = keepPending ? prev.filter((card) => !card.isPersisted) : [];
+        const nextPendingCards: PendingCardInstance[] = keepPending
+          ? prev.reduce<PendingCardInstance[]>((acc, card) => {
+              if (!card.isPersisted) acc.push(card);
+              return acc;
+            }, [])
+          : [];
 
-        const persistedCards: SelectedCardInstance[] = walletCards.map((card) => ({
+        const persistedCards: PersistedCardInstance[] = walletCards.map((card) => ({
           instanceId: `persisted-${card.id}`,
           cardId: card.id,
           product_key: card.product_key,
@@ -572,8 +590,8 @@ export function WalletBuilder() {
   );
 
   const handleRequestRemove = useCallback(
-    (card: SelectedCardInstance) => {
-      if (!card.isPersisted || isRemovingCard) return;
+    (card: PersistedCardInstance) => {
+      if (isRemovingCard) return;
       setRemoveTargetCard(card);
       setRemoveCardError(null);
     },
@@ -587,7 +605,7 @@ export function WalletBuilder() {
   }, [isRemovingCard]);
 
   const handleConfirmRemove = useCallback(async () => {
-    if (!removeTargetCard || !removeTargetCard.isPersisted || isRemovingCard) return;
+    if (!removeTargetCard || isRemovingCard) return;
 
     setIsRemovingCard(true);
     setRemoveCardError(null);
@@ -635,7 +653,7 @@ export function WalletBuilder() {
       }
 
       const resolvedCards = await Promise.all(pendingCards.map((card) => resolveCanonicalCard(card)));
-      const resolvedCardSourceById = new Map<string, SelectedCardInstance>();
+      const resolvedCardSourceById = new Map<string, PendingCardInstance>();
       for (let index = 0; index < resolvedCards.length; index += 1) {
         const resolved = resolvedCards[index];
         const source = pendingCards[index];
@@ -645,9 +663,10 @@ export function WalletBuilder() {
       }
       const uniqueCardIds = Array.from(
         new Set(
-          resolvedCards
-            .filter((card): card is { id: string; product_key: string | null } => Boolean(card?.id))
-            .map((card) => card.id),
+          resolvedCards.reduce<string[]>((acc, card) => {
+            if (card?.id) acc.push(card.id);
+            return acc;
+          }, []),
         ),
       );
       if (uniqueCardIds.length === 0) {
@@ -683,23 +702,25 @@ export function WalletBuilder() {
         setSelectedCards((prev) => {
           let next = [...prev];
           const walletCardsToAppend = newCardIds
-            .map((cardId) => {
+            .flatMap((cardId) => {
               const sourceCard = resolvedCardSourceById.get(cardId) ?? pendingCards.find((card) => card.cardId === cardId);
 
-              if (!sourceCard) return null;
+              if (!sourceCard) return [];
 
-              return {
-                instanceId: `persisted-${cardId}`,
-                cardId,
-                product_key: sourceCard.product_key,
-                card_name: sourceCard.card_name,
-                display_name: sourceCard.display_name,
-                issuer: sourceCard.issuer,
-                network: sourceCard.network,
-                isPersisted: true,
-              } satisfies SelectedCardInstance;
+              return [
+                {
+                  instanceId: `persisted-${cardId}`,
+                  cardId,
+                  product_key: sourceCard.product_key,
+                  card_name: sourceCard.card_name,
+                  display_name: sourceCard.display_name,
+                  issuer: sourceCard.issuer,
+                  network: sourceCard.network,
+                  isPersisted: true,
+                } satisfies PersistedCardInstance,
+              ];
             })
-            .filter((card): card is SelectedCardInstance => Boolean(card));
+            .filter(Boolean);
 
           for (const walletCard of walletCardsToAppend) {
             const alreadyPersisted = next.some((card) => card.isPersisted && card.cardId === walletCard.cardId);
