@@ -514,7 +514,7 @@ const CardPanel = memo(function CardPanel({
             event.preventDefault();
             onToggleExpand(card.cardId);
           }}
-          className="flex w-full items-center justify-between gap-3 pl-3 pr-3.5 py-3.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
+          className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-inset"
         >
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-white">{card.cardName}</p>
@@ -597,7 +597,7 @@ const CardPanel = memo(function CardPanel({
       </div>
 
       {isExpanded ? (
-        <div className="space-y-3 border-t border-white/10 pl-3 pr-2.5 py-3">
+        <div className="space-y-3 border-t border-white/10 px-4 py-4">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
@@ -1186,7 +1186,7 @@ export function BenefitsOnboarding() {
   if (loading) {
     return (
       <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
-        <MobilePageContainer className="px-3 md:px-0">
+        <MobilePageContainer className="px-2 md:px-0">
           <Surface className="p-6 text-sm text-white/75">Loading your benefits setup…</Surface>
         </MobilePageContainer>
       </AppShell>
@@ -1196,7 +1196,7 @@ export function BenefitsOnboarding() {
   if (error) {
     return (
       <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
-        <MobilePageContainer className="px-3 md:px-0">
+        <MobilePageContainer className="px-2 md:px-0">
           <Surface className="space-y-4 p-6">
             <p className="text-sm text-white/80">{error}</p>
             <Button onClick={() => void loadWalletBenefits()}>Try again</Button>
@@ -1208,7 +1208,7 @@ export function BenefitsOnboarding() {
 
   return (
     <AppShell className="min-h-dvh overflow-x-hidden" containerClassName="px-0 py-8 sm:py-10 md:px-6">
-      <MobilePageContainer className="px-3 md:px-0">
+      <MobilePageContainer className="px-2 md:px-0">
         <div className="w-full min-w-0">
         <div className="mb-6 min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
