@@ -331,32 +331,36 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
             <div className="min-w-0 flex flex-col gap-2">
               <div className="flex min-w-0 items-center gap-1">
                 <p className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
-                {canExpand ? (
-                  <button
-                    type="button"
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleToggleExpand();
-                    }}
-                    aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
-                    aria-expanded={isExpanded}
-                    aria-controls={detailsRegionId}
-                  >
-                    <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
-                  </button>
-                ) : null}
               </div>
 
-              {formattedAmount ? (
-                <span
-                  className={cn(
-                    "inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-3 py-1 text-sm font-medium leading-none",
-                    BENEFIT_AMOUNT_ACCENT_CLASS,
-                  )}
-                >
-                  {formattedAmount}
-                </span>
+              {formattedAmount || canExpand ? (
+                <div className="flex items-center gap-2">
+                  {formattedAmount ? (
+                    <span
+                      className={cn(
+                        "inline-flex w-fit shrink-0 items-center whitespace-nowrap rounded-full border border-[#F7C948]/35 bg-[#F7C948]/15 px-3 py-1 text-sm font-medium leading-none",
+                        BENEFIT_AMOUNT_ACCENT_CLASS,
+                      )}
+                    >
+                      {formattedAmount}
+                    </span>
+                  ) : null}
+                  {canExpand ? (
+                    <button
+                      type="button"
+                      className="relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition hover:bg-white/[0.08] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020] after:absolute after:-inset-[10px] after:content-['']"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleToggleExpand();
+                      }}
+                      aria-label={isExpanded ? `Collapse details for ${benefit.display_name}` : `Expand details for ${benefit.display_name}`}
+                      aria-expanded={isExpanded}
+                      aria-controls={detailsRegionId}
+                    >
+                      <ChevronIcon className={cn("h-4 w-4 transition-transform duration-200 ease-out", isExpanded ? "rotate-180" : "")} />
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
