@@ -1,69 +1,68 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/utils/supabase/server";
-import { getSiteURL } from "@/lib/site-url";
 
-function hasHint(e: unknown): e is { hint?: string } {
-  return typeof e === "object" && e !== null && "hint" in e;
-}
-
-function hasCode(e: unknown): e is { code?: string } {
-  return typeof e === "object" && e !== null && "code" in e;
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && typeof error.message === "string" && error.message.length > 0) {
-    return error.message;
-  }
-  return "Failed to complete auth callback";
-}
+const getErrorRedirect = (origin: string, detail: string) =>
+  NextResponse.redirect(new URL(`/auth/error?reason=oauth_callback_failed&detail=${detail}`, origin));
 
 export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const next = "/onboarding/benefits";
-  const origin = request.nextUrl.origin || getSiteURL();
+  const code = request.nextUrl.searchParams.get("code");
+  const origin = request.nextUrl.origin;
+  const pathname = request.nextUrl.pathname;
 
-  const errorRedirect = NextResponse.redirect(new URL("/auth/error?reason=oauth_callback_failed", origin));
-
-  if (!code) {
-    console.error("Auth callback missing code parameter", {
-      pathname: url.pathname,
-      hasCode: false,
-    });
-    return errorRedirect;
-  }
-  console.info("Auth callback received code parameter", {
-    pathname: url.pathname,
-    hasCode: true,
+  console.info("Auth callback hit", {
+    origin,
+    pathname,
+    hasCode: Boolean(code),
   });
 
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (error) {
-      const hint = hasHint(error) ? error.hint : undefined;
-      const code = hasCode(error) ? error.code : undefined;
-      console.error("Auth callback failed to exchange code for session", {
-        message: getErrorMessage(error),
-        code,
-        hint,
-      });
-      return errorRedirect;
-    }
-    console.info("Auth callback exchanged code for session successfully", {
-      pathname: url.pathname,
-    });
-  } catch (error: unknown) {
-    const hint = hasHint(error) ? error.hint : undefined;
-    const code = hasCode(error) ? error.code : undefined;
-    console.error("Auth callback threw while exchanging code for session", {
-      message: getErrorMessage(error),
-      code,
-      hint,
-    });
-    return errorRedirect;
+  if (!code) {
+    return getErrorRedirect(origin, "missing_code");
   }
 
-  return NextResponse.redirect(new URL(next, origin));
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    const missingEnvError = new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    console.error("Auth callback missing Supabase env vars", {
+      origin,
+      pathname,
+      hasNextPublicSupabaseUrl: Boolean(supabaseUrl),
+      hasNextPublicSupabaseAnonKey: Boolean(supabaseAnonKey),
+      message: missingEnvError.message,
+    });
+    return NextResponse.redirect(new URL("/auth/error?reason=missing_env", origin));
+  }
+
+  const cookieStore = await cookies();
+  const response = NextResponse.redirect(new URL("/onboarding/benefits", origin));
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set({ name, value, ...options });
+        });
+      },
+    },
+  });
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error) {
+    console.error("Auth callback exchange failed", {
+      origin,
+      pathname,
+      hasCode: true,
+      message: error.message,
+      status: error.status,
+    });
+    return getErrorRedirect(origin, "exchange_failed");
+  }
+
+  return response;
 }
