@@ -161,6 +161,7 @@ export function WalletBuilder() {
   const [isCardsIndexLoading, setIsCardsIndexLoading] = useState(false);
   const [cardsIndexError, setCardsIndexError] = useState<string | null>(null);
   const [selectedIssuerFilters, setSelectedIssuerFilters] = useState<string[]>([]);
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCards, setSelectedCards] = useState<SelectedCardInstance[]>([]);
   const [isWalletLoading, setIsWalletLoading] = useState(true);
@@ -190,7 +191,7 @@ export function WalletBuilder() {
 
   const normalizedQuery = query.trim();
   const hasActiveFilters = selectedIssuerFilters.length > 0;
-  const shouldShowResults = isResultsOpen && (normalizedQuery.length >= 1 || hasActiveFilters);
+  const shouldShowResults = !isFilterPopoverOpen && isResultsOpen && (normalizedQuery.length >= 1 || hasActiveFilters);
   const availableIssuerSet = useMemo(
     () => new Set(cardsIndex.map((card) => getCanonicalIssuerLabel(card.issuer))),
     [cardsIndex],
@@ -758,7 +759,7 @@ export function WalletBuilder() {
                     autoComplete="off"
                     className={cn(controlClasses, "min-w-0 pl-9 pr-12 text-white/95", rowTransition)}
                   />
-                  <Popover>
+                  <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
                     <PopoverTrigger asChild>
                       <button
                         type="button"
