@@ -191,7 +191,7 @@ export function WalletBuilder() {
 
   const normalizedQuery = query.trim();
   const hasActiveFilters = selectedIssuerFilters.length > 0;
-  const shouldShowResults = !isFilterPopoverOpen && isResultsOpen && (normalizedQuery.length >= 1 || hasActiveFilters);
+  const shouldShowResults = !isFilterPopoverOpen && isResultsOpen && normalizedQuery.length >= 1;
   const availableIssuerSet = useMemo(
     () => new Set(cardsIndex.map((card) => getCanonicalIssuerLabel(card.issuer))),
     [cardsIndex],
@@ -643,14 +643,13 @@ export function WalletBuilder() {
     setSelectedIssuerFilters((prev) =>
       prev.includes(issuerId) ? prev.filter((value) => value !== issuerId) : [...prev, issuerId],
     );
-    setIsResultsOpen(true);
     setHighlightedIndex(0);
   }, []);
 
   const clearFilters = useCallback(() => {
     setSelectedIssuerFilters([]);
     setHighlightedIndex(0);
-    if (!normalizedQuery) setIsResultsOpen(false);
+    setIsResultsOpen(normalizedQuery.length >= 1);
   }, [normalizedQuery]);
 
   const handleRequestRemove = useCallback(
@@ -748,11 +747,11 @@ export function WalletBuilder() {
                     onChange={(event) => {
                       const nextQuery = event.target.value;
                       setQuery(nextQuery);
-                      setIsResultsOpen(nextQuery.trim().length >= 1 || hasActiveFilters);
+                      setIsResultsOpen(nextQuery.trim().length >= 1);
                       setHighlightedIndex(0);
                     }}
                     onFocus={() => {
-                      if (query.trim().length >= 1 || hasActiveFilters) setIsResultsOpen(true);
+                      if (query.trim().length >= 1) setIsResultsOpen(true);
                     }}
                     onKeyDown={handleResultsKeyDown}
                     placeholder="Search by credit card (e.g., Sapphire, Platinum)"
