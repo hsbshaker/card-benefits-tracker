@@ -23,8 +23,6 @@ type CardResultsListProps = {
 };
 
 const rowTransition = "transition motion-safe:duration-200 ease-out";
-const issuerMap = { "American Express": "AMEX" } as const;
-
 function getCleanCardName(card: CardResult) {
   let name = card.display_name ?? card.card_name;
   if (name.startsWith("American Express ")) {
@@ -37,7 +35,9 @@ function getCleanCardName(card: CardResult) {
 }
 
 function getIssuerDisplayName(issuer: string) {
-  return issuerMap[issuer as keyof typeof issuerMap] ?? issuer;
+  const normalizedIssuer = issuer.trim().toLowerCase();
+  if (normalizedIssuer === "american express" || normalizedIssuer === "amex") return "AMEX";
+  return issuer;
 }
 
 export function CardResultsList({

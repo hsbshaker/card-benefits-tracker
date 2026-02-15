@@ -40,10 +40,21 @@ type WalletCardRow = {
   cards: WalletCard[] | null;
 };
 
+type IssuerFilterOption = {
+  id: string;
+  label: string;
+  searchTokens: string[];
+};
+
 const rowTransition = "transition motion-safe:duration-200 ease-out";
 const controlClasses =
   "w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-[#F7C948]/35 focus:ring-2 focus:ring-[#F7C948]/20";
-const issuerMap = { "American Express": "AMEX" } as const;
+const ISSUER_FILTER_OPTIONS: IssuerFilterOption[] = [
+  { id: "AMEX", label: "AMEX", searchTokens: ["amex", "american express"] },
+  { id: "Chase", label: "Chase", searchTokens: ["chase"] },
+  { id: "Capital One", label: "Capital One", searchTokens: ["capital one", "capitalone"] },
+  { id: "Citi", label: "Citi", searchTokens: ["citi"] },
+];
 
 function getCleanCardName(displayName: string | null, cardName: string) {
   let name = displayName ?? cardName;
@@ -56,8 +67,17 @@ function getCleanCardName(displayName: string | null, cardName: string) {
   return name;
 }
 
+function getCanonicalIssuerLabel(issuer: string) {
+  const normalizedIssuer = normalizeValue(issuer);
+  if (normalizedIssuer === "american express" || normalizedIssuer === "amex") return "AMEX";
+  if (normalizedIssuer === "capital one" || normalizedIssuer === "capitalone") return "Capital One";
+  if (normalizedIssuer === "chase") return "Chase";
+  if (normalizedIssuer === "citi") return "Citi";
+  return issuer.trim();
+}
+
 function getIssuerDisplayName(issuer: string) {
-  return issuerMap[issuer as keyof typeof issuerMap] ?? issuer;
+  return getCanonicalIssuerLabel(issuer);
 }
 
 function getCardSortName(displayName: string | null, cardName: string) {
@@ -69,14 +89,11 @@ function normalizeValue(value: string | null | undefined) {
 }
 
 function getIssuerSearchTokens(issuer: string) {
+  const canonicalIssuer = getCanonicalIssuerLabel(issuer);
+  const knownOption = ISSUER_FILTER_OPTIONS.find((option) => option.id === canonicalIssuer);
+  if (knownOption) return knownOption.searchTokens;
   const normalizedIssuer = normalizeValue(issuer);
-  if (normalizedIssuer === "american express") {
-    return [normalizedIssuer, "amex"];
-  }
-  if (normalizedIssuer === "capital one") {
-    return [normalizedIssuer, "capitalone"];
-  }
-  return [normalizedIssuer];
+  return normalizedIssuer ? [normalizedIssuer] : [];
 }
 
 function getMatchScore(value: string, query: string) {
@@ -87,31 +104,19 @@ function getMatchScore(value: string, query: string) {
   return 0;
 }
 
-function filterAndRankCards(
-  cards: CardResult[],
-  query: string,
-  selectedIssuers: string[],
-  selectedNetworks: string[],
-) {
+function filterAndRankCards(cards: CardResult[], query: string, selectedIssuers: string[]) {
   const normalizedQuery = normalizeValue(query);
   const selectedIssuerSet = new Set(selectedIssuers);
-  const selectedNetworkSet = new Set(selectedNetworks);
   const hasIssuerFilter = selectedIssuerSet.size > 0;
-  const hasNetworkFilter = selectedNetworkSet.size > 0;
 
   return cards
     .filter((card) => {
-      if (hasIssuerFilter && !selectedIssuerSet.has(card.issuer)) return false;
-      if (hasNetworkFilter) {
-        const network = card.network ?? "";
-        if (!selectedNetworkSet.has(network)) return false;
-      }
+      if (hasIssuerFilter && !selectedIssuerSet.has(getCanonicalIssuerLabel(card.issuer))) return false;
       return true;
     })
     .map((card) => {
       const issuerTokens = getIssuerSearchTokens(card.issuer);
       const nameTokens = [normalizeValue(card.display_name), normalizeValue(card.card_name)];
-      const networkToken = normalizeValue(card.network);
 
       if (!normalizedQuery) {
         return { card, score: 0 };
@@ -119,8 +124,7 @@ function filterAndRankCards(
 
       const issuerScore = Math.max(...issuerTokens.map((token) => getMatchScore(token, normalizedQuery)));
       const nameScore = Math.max(...nameTokens.map((token) => getMatchScore(token, normalizedQuery)));
-      const networkScore = getMatchScore(networkToken, normalizedQuery);
-      const score = Math.max(issuerScore + 40, nameScore, networkScore);
+      const score = Math.max(issuerScore + 40, nameScore);
 
       if (score <= 0) return null;
       return { card, score };
@@ -157,7 +161,6 @@ export function WalletBuilder() {
   const [isCardsIndexLoading, setIsCardsIndexLoading] = useState(false);
   const [cardsIndexError, setCardsIndexError] = useState<string | null>(null);
   const [selectedIssuerFilters, setSelectedIssuerFilters] = useState<string[]>([]);
-  const [selectedNetworkFilters, setSelectedNetworkFilters] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCards, setSelectedCards] = useState<SelectedCardInstance[]>([]);
   const [isWalletLoading, setIsWalletLoading] = useState(true);
@@ -186,22 +189,23 @@ export function WalletBuilder() {
   } | null>(null);
 
   const normalizedQuery = query.trim();
-  const hasActiveFilters = selectedIssuerFilters.length > 0 || selectedNetworkFilters.length > 0;
+  const hasActiveFilters = selectedIssuerFilters.length > 0;
   const shouldShowResults = isResultsOpen && (normalizedQuery.length >= 1 || hasActiveFilters);
-  const issuerFilterOptions = useMemo(
-    () => Array.from(new Set(cardsIndex.map((card) => card.issuer))).sort((a, b) => a.localeCompare(b)),
+  const availableIssuerSet = useMemo(
+    () => new Set(cardsIndex.map((card) => getCanonicalIssuerLabel(card.issuer))),
     [cardsIndex],
   );
-  const networkFilterOptions = useMemo(
+  const issuerFilterOptions = useMemo(
     () =>
-      Array.from(new Set(cardsIndex.map((card) => card.network).filter((network): network is string => Boolean(network)))).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [cardsIndex],
+      ISSUER_FILTER_OPTIONS.map((issuer) => ({
+        ...issuer,
+        enabled: availableIssuerSet.has(issuer.id),
+      })),
+    [availableIssuerSet],
   );
   const results = useMemo(
-    () => filterAndRankCards(cardsIndex, normalizedQuery, selectedIssuerFilters, selectedNetworkFilters),
-    [cardsIndex, normalizedQuery, selectedIssuerFilters, selectedNetworkFilters],
+    () => filterAndRankCards(cardsIndex, normalizedQuery, selectedIssuerFilters),
+    [cardsIndex, normalizedQuery, selectedIssuerFilters],
   );
   const walletCardIds = useMemo(() => new Set(selectedCards.map((selected) => selected.cardId)), [selectedCards]);
   const sortedWalletCards = useMemo(
@@ -634,17 +638,9 @@ export function WalletBuilder() {
     }
   };
 
-  const toggleIssuerFilter = useCallback((issuer: string) => {
+  const toggleIssuerFilter = useCallback((issuerId: string) => {
     setSelectedIssuerFilters((prev) =>
-      prev.includes(issuer) ? prev.filter((value) => value !== issuer) : [...prev, issuer],
-    );
-    setIsResultsOpen(true);
-    setHighlightedIndex(0);
-  }, []);
-
-  const toggleNetworkFilter = useCallback((network: string) => {
-    setSelectedNetworkFilters((prev) =>
-      prev.includes(network) ? prev.filter((value) => value !== network) : [...prev, network],
+      prev.includes(issuerId) ? prev.filter((value) => value !== issuerId) : [...prev, issuerId],
     );
     setIsResultsOpen(true);
     setHighlightedIndex(0);
@@ -652,7 +648,6 @@ export function WalletBuilder() {
 
   const clearFilters = useCallback(() => {
     setSelectedIssuerFilters([]);
-    setSelectedNetworkFilters([]);
     setHighlightedIndex(0);
     if (!normalizedQuery) setIsResultsOpen(false);
   }, [normalizedQuery]);
@@ -795,45 +790,36 @@ export function WalletBuilder() {
                           <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Issuer</p>
                           <div className="space-y-1.5">
                             {issuerFilterOptions.map((issuer) => {
-                              const checkboxId = `issuer-filter-${issuer.toLowerCase().replace(/\s+/g, "-")}`;
-                              const checked = selectedIssuerFilters.includes(issuer);
+                              const checkboxId = `issuer-filter-${issuer.id.toLowerCase().replace(/\s+/g, "-")}`;
+                              const checked = selectedIssuerFilters.includes(issuer.id);
                               return (
-                                <label key={issuer} htmlFor={checkboxId} className="flex cursor-pointer items-center gap-2.5 text-sm text-white/85">
+                                <label
+                                  key={issuer.id}
+                                  htmlFor={checkboxId}
+                                  className={cn(
+                                    "flex items-center gap-2.5 text-sm",
+                                    issuer.enabled ? "cursor-pointer text-white/85" : "cursor-not-allowed text-white/45",
+                                  )}
+                                >
                                   <Checkbox
                                     id={checkboxId}
                                     checked={checked}
-                                    onCheckedChange={() => toggleIssuerFilter(issuer)}
-                                    aria-label={issuer}
+                                    onCheckedChange={() => {
+                                      if (!issuer.enabled) return;
+                                      toggleIssuerFilter(issuer.id);
+                                    }}
+                                    aria-label={issuer.label}
+                                    disabled={!issuer.enabled}
                                   />
-                                  <span className="truncate">{getIssuerDisplayName(issuer)}</span>
+                                  <span className="truncate">
+                                    {issuer.label}
+                                    {!issuer.enabled ? " (Coming Soon)" : ""}
+                                  </span>
                                 </label>
                               );
                             })}
                           </div>
                         </div>
-
-                        {networkFilterOptions.length > 0 ? (
-                          <div className="space-y-2 border-t border-white/10 pt-2">
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Network</p>
-                            <div className="space-y-1.5">
-                              {networkFilterOptions.map((network) => {
-                                const checkboxId = `network-filter-${network.toLowerCase().replace(/\s+/g, "-")}`;
-                                const checked = selectedNetworkFilters.includes(network);
-                                return (
-                                  <label key={network} htmlFor={checkboxId} className="flex cursor-pointer items-center gap-2.5 text-sm text-white/85">
-                                    <Checkbox
-                                      id={checkboxId}
-                                      checked={checked}
-                                      onCheckedChange={() => toggleNetworkFilter(network)}
-                                      aria-label={network}
-                                    />
-                                    <span className="truncate">{network}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
                       </div>
                     </PopoverContent>
                   </Popover>
