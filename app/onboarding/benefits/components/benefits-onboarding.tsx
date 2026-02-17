@@ -562,6 +562,16 @@ const CardPanel = memo(function CardPanel({
             </div>
           </div>
 
+          {/* Render once per expanded card so the bell-column meaning stays visible across cadence tab switches. */}
+          <div className="px-4">
+            <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+              <div aria-hidden="true" />
+              <div className="w-11 text-right">
+                <p className="whitespace-nowrap text-[11px] uppercase tracking-wider text-white/40">Remind Me</p>
+              </div>
+            </div>
+          </div>
+
           <div id={`panel-${card.cardId}-${activeCadence}`} role="tabpanel" aria-labelledby={`tab-${card.cardId}-${activeCadence}`} className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{formatCadenceLabel(activeCadence)}</p>
