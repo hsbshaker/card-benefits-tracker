@@ -6,18 +6,20 @@ export const runtime = "nodejs";
 
 type DigestSection = "monthly" | "quarterly" | "semiannual" | "annual";
 
-type BenefitRow = {
-  user_id: string;
-  benefits: {
-    display_name: string;
-    cadence: string;
-    value_cents: number | null;
-    notes: string | null;
-    cards: {
-      issuer: string;
-      card_name: string;
-    } | null;
+type BenefitRecord = {
+  display_name: string;
+  cadence: string;
+  value_cents: number | null;
+  notes: string | null;
+  cards: {
+    issuer: string;
+    card_name: string;
   } | null;
+};
+
+type DigestUserRow = {
+  user_id: string;
+  benefits: BenefitRecord | BenefitRecord[] | null;
 };
 
 type DigestItem = {
@@ -259,7 +261,8 @@ export async function GET(request: Request) {
     .from("user_benefits")
     .select(selectExpr)
     .eq("remind_me", true)
-    .in("benefits.cadence", dueCadences);
+    .in("benefits.cadence", dueCadences)
+    .returns<DigestUserRow[]>();
 
   if (consideredError) {
     console.error("Failed to fetch considered digest users", {
@@ -272,14 +275,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch digest candidates", runId }, { status: 500 });
   }
 
-  const usersConsidered = new Set(((consideredRows ?? []) as BenefitRow[]).map((row) => row.user_id)).size;
+  const usersConsidered = new Set((consideredRows ?? []).map((row) => row.user_id)).size;
 
-  const { data: eligibleRowsRaw, error: eligibleError } = await supabase
+  const { data: eligibleRows, error: eligibleError } = await supabase
     .from("user_benefits")
     .select(selectExpr)
     .eq("remind_me", true)
     .eq("used", false)
-    .in("benefits.cadence", dueCadences);
+    .in("benefits.cadence", dueCadences)
+    .returns<DigestUserRow[]>();
 
   if (eligibleError) {
     console.error("Failed to fetch eligible digest users", {
@@ -292,40 +296,41 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch eligible digest users", runId }, { status: 500 });
   }
 
-  const eligibleRows = (eligibleRowsRaw ?? []) as BenefitRow[];
-
   const payloadByUser = new Map<string, UserDigestPayload>();
 
-  for (const row of eligibleRows) {
-    const cadence = row.benefits?.cadence;
-    if (!cadence) {
-      continue;
+  for (const row of eligibleRows ?? []) {
+    const benefitRows = Array.isArray(row.benefits) ? row.benefits : row.benefits ? [row.benefits] : [];
+    for (const benefit of benefitRows) {
+      const cadence = benefit.cadence;
+      if (!cadence) {
+        continue;
+      }
+
+      const section = cadenceToSection(cadence);
+      if (!section || !dueSections.includes(section)) {
+        continue;
+      }
+
+      const card = benefit.cards;
+      const cardDisplayName = card ? `${card.issuer} ${card.card_name}` : "Unknown Card";
+      const item: DigestItem = {
+        cardDisplayName,
+        benefitDisplayName: benefit.display_name ?? "Unnamed Benefit",
+        valueCents: benefit.value_cents ?? null,
+        notes: benefit.notes ?? null,
+      };
+
+      if (!payloadByUser.has(row.user_id)) {
+        payloadByUser.set(row.user_id, {
+          monthly: [],
+          quarterly: [],
+          semiannual: [],
+          annual: [],
+        });
+      }
+
+      payloadByUser.get(row.user_id)?.[section].push(item);
     }
-
-    const section = cadenceToSection(cadence);
-    if (!section || !dueSections.includes(section)) {
-      continue;
-    }
-
-    const card = row.benefits?.cards;
-    const cardDisplayName = card ? `${card.issuer} ${card.card_name}` : "Unknown Card";
-    const item: DigestItem = {
-      cardDisplayName,
-      benefitDisplayName: row.benefits?.display_name ?? "Unnamed Benefit",
-      valueCents: row.benefits?.value_cents ?? null,
-      notes: row.benefits?.notes ?? null,
-    };
-
-    if (!payloadByUser.has(row.user_id)) {
-      payloadByUser.set(row.user_id, {
-        monthly: [],
-        quarterly: [],
-        semiannual: [],
-        annual: [],
-      });
-    }
-
-    payloadByUser.get(row.user_id)?.[section].push(item);
   }
 
   let sentCount = 0;
