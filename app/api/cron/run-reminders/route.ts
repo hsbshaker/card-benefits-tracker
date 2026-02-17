@@ -156,8 +156,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const utcDate = planned.toISOString().slice(0, 10);
-    const dedupeKey = `${schedule.id}:${utcDate}`;
+    const plannedSendAtIso = planned.toISOString();
 
     const { data: insertedLog, error: insertError } = await supabase
       .from("reminder_send_log")
@@ -167,8 +166,7 @@ export async function GET(request: Request) {
         card_id: schedule.card_id,
         benefit_id: schedule.benefit_id,
         run_id: runId,
-        dedupe_key: dedupeKey,
-        planned_send_at: planned.toISOString(),
+        planned_send_at: plannedSendAtIso,
         status: "attempted",
       })
       .select("id")
@@ -180,29 +178,13 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const failedDedupeKey = `${dedupeKey}:error:${runId.slice(0, 8)}:${i}`;
-      const { error: fallbackInsertError } = await supabase.from("reminder_send_log").insert({
-        schedule_id: schedule.id,
-        user_id: schedule.user_id,
-        card_id: schedule.card_id,
-        benefit_id: schedule.benefit_id,
-        run_id: runId,
-        dedupe_key: failedDedupeKey,
-        planned_send_at: planned.toISOString(),
-        status: "failed",
-        error: `attempted insert failed: ${insertError.message}`,
+      console.error("Failed to claim reminder send row", {
+        scheduleId: schedule.id,
+        runId,
+        insertCode: insertError.code,
+        insertMessage: insertError.message,
+        planned_send_at: plannedSendAtIso,
       });
-
-      if (fallbackInsertError) {
-        console.error("Failed to write fallback failed log", {
-          scheduleId: schedule.id,
-          runId,
-          insertCode: insertError.code,
-          insertMessage: insertError.message,
-          fallbackCode: fallbackInsertError.code,
-          fallbackMessage: fallbackInsertError.message,
-        });
-      }
 
       continue;
     }
@@ -257,26 +239,6 @@ export async function GET(request: Request) {
       continue;
     }
 
-    if (logId) {
-      const { error: markSentError } = await supabase
-        .from("reminder_send_log")
-        .update({ status: "sent", error: null, skip_reason: null })
-        .eq("id", logId);
-
-      if (markSentError) {
-        console.error("Failed to mark reminder log row as sent", {
-          scheduleId: schedule.id,
-          logId,
-          runId,
-          code: markSentError.code,
-          message: markSentError.message,
-        });
-        continue;
-      }
-    }
-
-    sent += 1;
-
     if (process.env.SIMULATE_ADVANCE_RACE === "1" && process.env.NODE_ENV !== "production") {
       const simulatedNext = new Date(planned.getTime() + 1_000).toISOString();
       const { error: simulateRaceError } = await supabase
@@ -319,6 +281,26 @@ export async function GET(request: Request) {
 
     if ((advancedRows ?? []).length > 0) {
       advanced += 1;
+
+      if (logId) {
+        const { error: markSentError } = await supabase
+          .from("reminder_send_log")
+          .update({ status: "sent", error: null, skip_reason: null })
+          .eq("id", logId);
+
+        if (markSentError) {
+          console.error("Failed to mark reminder log row as sent", {
+            scheduleId: schedule.id,
+            logId,
+            runId,
+            code: markSentError.code,
+            message: markSentError.message,
+          });
+          continue;
+        }
+      }
+
+      sent += 1;
     } else {
       await markLogAdvanceFailed("concurrent_update_no_rows");
       console.error("Reminder schedule not advanced due to concurrent update", {
