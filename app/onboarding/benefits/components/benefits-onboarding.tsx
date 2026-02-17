@@ -60,6 +60,7 @@ type SupabaseErrorLike = {
 
 const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semi_annual", "annual", "one_time"];
 const BENEFIT_AMOUNT_ACCENT_CLASS = "text-[#F7C948]";
+const BELL_COLUMN_WIDTH_CLASS = "w-16";
 const ISSUER_DISPLAY_MAP: Record<string, string> = {
   amex: "American Express",
   "american express": "American Express",
@@ -380,7 +381,7 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               ) : null}
             </div>
 
-            <div className="flex shrink-0 items-start">
+            <div className={cn("flex shrink-0 items-start justify-end", BELL_COLUMN_WIDTH_CLASS)}>
               <button
                 type="button"
                 className={cn(
@@ -566,8 +567,8 @@ const CardPanel = memo(function CardPanel({
             {/* Render both labels in one row so cadence + reminder headers share identical style and baseline alignment. */}
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{formatCadenceLabel(activeCadence)}</p>
-              <div className="w-11 text-right">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Remind Me</p>
+              <div className={cn("flex shrink-0 justify-end", BELL_COLUMN_WIDTH_CLASS)}>
+                <p className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide leading-none text-white/50">Remind Me</p>
               </div>
             </div>
 
