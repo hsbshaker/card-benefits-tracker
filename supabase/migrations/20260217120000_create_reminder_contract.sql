@@ -3,6 +3,8 @@
 -- - Keep schedule uniqueness at (user_id, card_id, benefit_id)
 -- - Keep due-scan efficient with (enabled, next_send_at)
 
+create extension if not exists "pgcrypto";
+
 create table if not exists public.reminder_schedules (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -49,9 +51,14 @@ update public.reminder_schedules
 set next_send_at = now()
 where next_send_at is null;
 
+update public.reminder_schedules
+set cadence = 'monthly'
+where cadence is null;
+
 alter table if exists public.reminder_schedules
   alter column enabled set default true,
   alter column enabled set not null,
+  alter column cadence set not null,
   alter column timezone set default 'UTC',
   alter column timezone set not null,
   alter column created_at set default now(),
@@ -74,8 +81,26 @@ begin
 end
 $$;
 
-create index if not exists reminder_schedules_enabled_next_send_at_idx
-  on public.reminder_schedules (enabled, next_send_at);
+do $$
+begin
+  if to_regclass('public.reminder_schedules_enabled_next_send_at_idx') is null then
+    create index reminder_schedules_enabled_next_send_at_idx
+      on public.reminder_schedules (enabled, next_send_at);
+  end if;
+end
+$$;
+
+do $$
+begin
+  begin
+    alter table public.reminder_schedules
+      add constraint reminder_schedules_cadence_check
+      check (cadence in ('monthly', 'quarterly', 'annual'));
+  exception
+    when duplicate_object then null;
+  end;
+end
+$$;
 
 create table if not exists public.reminder_send_log (
   id uuid primary key default gen_random_uuid(),
@@ -171,5 +196,23 @@ begin
   exception
     when duplicate_object then null;
   end;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.reminder_send_log_planned_send_at_idx') is null then
+    create index reminder_send_log_planned_send_at_idx
+      on public.reminder_send_log (planned_send_at);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.reminder_send_log_schedule_id_idx') is null then
+    create index reminder_send_log_schedule_id_idx
+      on public.reminder_send_log (schedule_id);
+  end if;
 end
 $$;
