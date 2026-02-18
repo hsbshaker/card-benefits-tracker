@@ -260,7 +260,7 @@ export default function LandingPage() {
 
       <footer className="mt-10 border-t border-white/10 py-6 text-sm text-white/55">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <span>© {new Date().getFullYear()} Card Benefits Tracker</span>
+          <span>Built with precision.</span>
           <div className="flex gap-5">
             <Link href="/terms" className="transition-colors hover:text-white/80">
               Terms
