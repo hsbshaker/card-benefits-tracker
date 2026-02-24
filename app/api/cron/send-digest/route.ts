@@ -249,7 +249,7 @@ export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret || bearerToken !== cronSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ version: "cron-digest-v2", error: "Unauthorized" }, { status: 401 });
   }
 
   let supabase: ReturnType<typeof getServiceRoleSupabaseClient>;
@@ -258,7 +258,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown service client configuration error";
     console.error("Missing Supabase env vars for digest cron", { error: errorMessage });
-    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    return NextResponse.json({ version: "cron-digest-v2", error: "Server misconfiguration" }, { status: 500 });
   }
 
   const runId = randomUUID();
@@ -269,7 +269,7 @@ export async function GET(request: Request) {
 
   if (process.env.NODE_ENV !== "production" && todayParam !== null) {
     if (!isValidYYYYMMDD(todayParam)) {
-      return NextResponse.json({ error: "Invalid today. Use YYYY-MM-DD." }, { status: 400 });
+      return NextResponse.json({ version: "cron-digest-v2", error: "Invalid today. Use YYYY-MM-DD." }, { status: 400 });
     }
     todayISO = todayParam;
   }
@@ -301,6 +301,7 @@ export async function GET(request: Request) {
 
   if (dueSections.length === 0) {
     return NextResponse.json({
+      version: "cron-digest-v2",
       runId,
       todayISO,
       dryRun,
@@ -343,7 +344,10 @@ export async function GET(request: Request) {
       hint: consideredError.hint,
       runId,
     });
-    return NextResponse.json({ error: "Failed to fetch digest candidates", runId }, { status: 500 });
+    return NextResponse.json(
+      { version: "cron-digest-v2", error: "Failed to fetch digest candidates", runId },
+      { status: 500 },
+    );
   }
 
   const usersConsidered = new Set((consideredRows ?? []).map((row) => row.user_id)).size;
@@ -364,7 +368,10 @@ export async function GET(request: Request) {
       hint: eligibleError.hint,
       runId,
     });
-    return NextResponse.json({ error: "Failed to fetch eligible digest users", runId }, { status: 500 });
+    return NextResponse.json(
+      { version: "cron-digest-v2", error: "Failed to fetch eligible digest users", runId },
+      { status: 500 },
+    );
   }
 
   const payloadByUser = new Map<string, UserDigestPayload>();
@@ -534,6 +541,7 @@ export async function GET(request: Request) {
   if (missingResendKey) {
     return NextResponse.json(
       {
+        version: "cron-digest-v2",
         error: "Email provider is not configured for live sends.",
         runId,
         todayISO,
@@ -560,6 +568,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
+    version: "cron-digest-v2",
     runId,
     todayISO,
     dryRun,
