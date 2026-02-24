@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
@@ -38,11 +39,11 @@ const CADENCE_BY_SECTION: Record<DigestSection, string[]> = {
   annual: ["annual"],
 };
 
-const OFFSETS_BY_SECTION: Record<DigestSection, number[]> = {
-  monthly: [7],
-  quarterly: [14, 7],
-  semiannual: [14, 7],
-  annual: [60, 30, 14],
+const LEAD_DAYS_BY_SECTION: Record<DigestSection, number[]> = {
+  monthly: [7, 0],
+  quarterly: [14, 7, 0],
+  semiannual: [14, 7, 0],
+  annual: [60, 30, 14, 0],
 };
 
 const SECTION_ORDER: DigestSection[] = ["monthly", "quarterly", "semiannual", "annual"];
@@ -58,11 +59,19 @@ const parseBearerToken = (header: string | null) => {
   return token;
 };
 
+const isValidYYYYMMDD = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const getUtcTodayISO = (value: Date = new Date()) => value.toISOString().slice(0, 10);
+
+const safeErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message.slice(0, 300);
+  }
+  return "unknown_error";
+};
+
 const toUtcDateOnly = (value: Date) =>
   new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
-
-const addUtcDays = (value: Date, days: number) =>
-  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate() + days));
 
 const dateKey = (value: Date) => value.toISOString().slice(0, 10);
 
@@ -78,15 +87,27 @@ const endOfSemiannualUtc = (todayUtcDateOnly: Date) => {
   const year = todayUtcDateOnly.getUTCFullYear();
   const jun30 = new Date(Date.UTC(year, 5, 30));
   const dec31 = new Date(Date.UTC(year, 11, 31));
-  return todayUtcDateOnly.getTime() < jun30.getTime() ? jun30 : dec31;
+  return todayUtcDateOnly.getTime() <= jun30.getTime() ? jun30 : dec31;
 };
 
 const endOfYearUtc = (value: Date) => new Date(Date.UTC(value.getUTCFullYear(), 11, 31));
 
-const dueSectionsToday = (nowUtc: Date): DigestSection[] => {
-  const todayUtcDateOnly = toUtcDateOnly(nowUtc);
-  const todayKey = dateKey(todayUtcDateOnly);
+type DueSectionsDebug = {
+  endOfMonthISO: string;
+  endOfQuarterISO: string;
+  endOfSemiannualISO: string;
+  endOfAnnualISO: string;
+  daysUntilMonthEnd: number;
+  daysUntilQuarterEnd: number;
+  daysUntilSemiannualEnd: number;
+  daysUntilAnnualEnd: number;
+  leadTimesBySection: Record<DigestSection, number[]>;
+};
 
+const daysBetweenUtcDateOnly = (fromDate: Date, toDate: Date) =>
+  Math.round((toDate.getTime() - fromDate.getTime()) / 86400000);
+
+const dueSectionsToday = (todayUtcDateOnly: Date): { dueSections: DigestSection[]; debug: DueSectionsDebug } => {
   const boundaries: Record<DigestSection, Date> = {
     monthly: endOfMonthUtc(todayUtcDateOnly),
     quarterly: endOfQuarterUtc(todayUtcDateOnly),
@@ -94,13 +115,29 @@ const dueSectionsToday = (nowUtc: Date): DigestSection[] => {
     annual: endOfYearUtc(todayUtcDateOnly),
   };
 
-  return SECTION_ORDER.filter((section) => {
-    const boundary = boundaries[section];
-    return OFFSETS_BY_SECTION[section].some((offsetDays) => {
-      const sendDate = addUtcDays(boundary, -offsetDays);
-      return dateKey(sendDate) === todayKey;
-    });
-  });
+  const daysUntilBySection: Record<DigestSection, number> = {
+    monthly: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.monthly),
+    quarterly: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.quarterly),
+    semiannual: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.semiannual),
+    annual: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.annual),
+  };
+
+  const dueSections = SECTION_ORDER.filter((section) => LEAD_DAYS_BY_SECTION[section].includes(daysUntilBySection[section]));
+
+  return {
+    dueSections,
+    debug: {
+      endOfMonthISO: dateKey(boundaries.monthly),
+      endOfQuarterISO: dateKey(boundaries.quarterly),
+      endOfSemiannualISO: dateKey(boundaries.semiannual),
+      endOfAnnualISO: dateKey(boundaries.annual),
+      daysUntilMonthEnd: daysUntilBySection.monthly,
+      daysUntilQuarterEnd: daysUntilBySection.quarterly,
+      daysUntilSemiannualEnd: daysUntilBySection.semiannual,
+      daysUntilAnnualEnd: daysUntilBySection.annual,
+      leadTimesBySection: LEAD_DAYS_BY_SECTION,
+    },
+  };
 };
 
 const cadenceToSection = (cadence: string): DigestSection | null => {
@@ -151,70 +188,60 @@ const renderDigestHtml = (payload: UserDigestPayload, sections: DigestSection[])
   return `<p>You have upcoming card benefit deadlines:</p>${sectionHtml}`;
 };
 
-const sendDigestEmail = async ({
+const resolveRecipientEmail = async ({
   supabase,
   userId,
-  subject,
-  payload,
-  sections,
+  emailToOverride,
 }: {
   supabase: ReturnType<typeof getServiceRoleSupabaseClient>;
   userId: string;
-  subject: string;
-  payload: UserDigestPayload;
-  sections: DigestSection[];
-}): Promise<{ providerMessageId: string | null }> => {
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const emailFrom = process.env.EMAIL_FROM;
-
-  if (!resendApiKey || !emailFrom) {
-    console.info("[digest] would send email", {
-      userId,
-      subject,
-      sections,
-      itemCount: sections.reduce((sum, section) => sum + payload[section].length, 0),
-    });
-    return { providerMessageId: null };
+  emailToOverride: string | null;
+}): Promise<string> => {
+  if (emailToOverride) {
+    return emailToOverride;
   }
 
   const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
   if (userError) {
-    throw new Error(`resolve_user_email_failed: ${userError.message}`);
+    throw new Error("resolve_user_email_failed");
   }
 
-  const toEmail = process.env.EMAIL_TO_OVERRIDE || userData.user?.email;
-  if (!toEmail) {
-    throw new Error("resolve_user_email_failed: missing_email");
+  const userEmail = userData.user?.email;
+  if (!userEmail) {
+    throw new Error("resolve_user_email_failed");
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: emailFrom,
-      to: [toEmail],
-      subject,
-      text: renderDigestText(payload, sections),
-      html: renderDigestHtml(payload, sections),
-    }),
+  return userEmail;
+};
+
+const sendDigestEmail = async ({
+  resend,
+  toEmail,
+  emailFrom,
+  subject,
+  payload,
+  sections,
+}: {
+  resend: Resend;
+  toEmail: string;
+  emailFrom: string;
+  subject: string;
+  payload: UserDigestPayload;
+  sections: DigestSection[];
+}): Promise<{ providerMessageId: string | null }> => {
+  const { data, error } = await resend.emails.send({
+    from: emailFrom,
+    to: [toEmail],
+    subject,
+    text: renderDigestText(payload, sections),
+    html: renderDigestHtml(payload, sections),
   });
 
-  const responseBody = await response.text();
-  if (!response.ok) {
-    throw new Error(`provider_send_failed:${response.status}:${responseBody}`);
+  if (error) {
+    throw new Error("provider_send_failed");
   }
 
-  let parsed: { id?: string } = {};
-  try {
-    parsed = JSON.parse(responseBody) as { id?: string };
-  } catch {
-    parsed = {};
-  }
-
-  return { providerMessageId: parsed.id ?? null };
+  return { providerMessageId: data?.id ?? null };
 };
 
 export async function GET(request: Request) {
@@ -235,15 +262,59 @@ export async function GET(request: Request) {
   }
 
   const runId = randomUUID();
+  const requestUrl = new URL(request.url);
+  const todayParam = requestUrl.searchParams.get("today");
+  const dryRun = requestUrl.searchParams.get("dryRun") === "1";
+  let todayISO = getUtcTodayISO();
+
+  if (process.env.NODE_ENV !== "production" && todayParam !== null) {
+    if (!isValidYYYYMMDD(todayParam)) {
+      return NextResponse.json({ error: "Invalid today. Use YYYY-MM-DD." }, { status: 400 });
+    }
+    todayISO = todayParam;
+  }
+
   const nowUtc = new Date();
-  const todayUtcDateOnly = toUtcDateOnly(nowUtc);
+  const isProduction = process.env.NODE_ENV === "production";
+  const todayUtcDateOnly = toUtcDateOnly(new Date(`${todayISO}T00:00:00.000Z`));
   const todayUtcKey = dateKey(todayUtcDateOnly);
-  const dueSections = dueSectionsToday(nowUtc);
+  const dueSectionsResult = dueSectionsToday(todayUtcDateOnly);
+  const dueSections = dueSectionsResult.dueSections;
+  const dueDebugFields = isProduction
+    ? {}
+    : {
+        endOfMonthISO: dueSectionsResult.debug.endOfMonthISO,
+        endOfQuarterISO: dueSectionsResult.debug.endOfQuarterISO,
+        endOfSemiannualISO: dueSectionsResult.debug.endOfSemiannualISO,
+        endOfAnnualISO: dueSectionsResult.debug.endOfAnnualISO,
+        daysUntilMonthEnd: dueSectionsResult.debug.daysUntilMonthEnd,
+        daysUntilQuarterEnd: dueSectionsResult.debug.daysUntilQuarterEnd,
+        daysUntilSemiannualEnd: dueSectionsResult.debug.daysUntilSemiannualEnd,
+        daysUntilAnnualEnd: dueSectionsResult.debug.daysUntilAnnualEnd,
+        leadTimesBySection: dueSectionsResult.debug.leadTimesBySection,
+      };
+  const emailToOverride = process.env.EMAIL_TO_OVERRIDE?.trim() || null;
+  const toOverride = emailToOverride !== null;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const resend = resendApiKey ? new Resend(resendApiKey) : null;
+  const emailFrom = process.env.EMAIL_FROM || "Memento <onboarding@resend.dev>";
 
   if (dueSections.length === 0) {
     return NextResponse.json({
       runId,
+      todayISO,
+      dryRun,
       dueSections,
+      ...dueDebugFields,
+      toOverride,
+      counts: {
+        eligible: 0,
+        attempted: 0,
+        sent: 0,
+        skipped_dedupe: 0,
+        failed: 0,
+      },
+      attemptedSends: [],
       usersConsidered: 0,
       usersEligible: 0,
       sentCount: 0,
@@ -336,6 +407,9 @@ export async function GET(request: Request) {
   let sentCount = 0;
   let dedupedCount = 0;
   let failedCount = 0;
+  let attemptedCount = 0;
+  let missingResendKey = false;
+  const attemptedSends: Array<{ userId: string; toEmailUsed: string | null; status: "sent" | "failed" }> = [];
 
   for (const [userId, payload] of payloadByUser.entries()) {
     const populatedSections = SECTION_ORDER.filter((section) => payload[section].length > 0);
@@ -377,15 +451,34 @@ export async function GET(request: Request) {
     }
 
     const logId = insertedLog?.id as string | undefined;
+    attemptedCount += 1;
 
+    let toEmailUsed = emailToOverride ?? "unresolved";
     try {
-      const { providerMessageId } = await sendDigestEmail({
+      toEmailUsed = await resolveRecipientEmail({
         supabase,
         userId,
-        subject,
-        payload,
-        sections: populatedSections,
+        emailToOverride,
       });
+      console.info("[digest] resolved recipient", { userId, toEmailUsed, toOverride });
+
+      let providerMessageId: string | null = null;
+      if (!dryRun) {
+        const resendClient = resend;
+        if (!resendClient) {
+          missingResendKey = true;
+          throw new Error("missing_resend_api_key");
+        }
+        const sendResult = await sendDigestEmail({
+          resend: resendClient,
+          toEmail: toEmailUsed,
+          emailFrom,
+          subject,
+          payload,
+          sections: populatedSections,
+        });
+        providerMessageId = sendResult.providerMessageId;
+      }
 
       if (logId) {
         const { error: markSentError } = await supabase
@@ -411,16 +504,19 @@ export async function GET(request: Request) {
         }
       }
 
+      attemptedSends.push({ userId, toEmailUsed: toOverride ? toEmailUsed : null, status: "sent" });
       sentCount += 1;
     } catch (error) {
       failedCount += 1;
-      const errorMessage = error instanceof Error ? error.message : "unknown_send_error";
+      const errorMessage = safeErrorMessage(error);
+      attemptedSends.push({ userId, toEmailUsed: toOverride ? toEmailUsed : null, status: "failed" });
 
       if (logId) {
         await supabase
           .from("email_send_log")
           .update({
             status: "failed",
+            provider_message_id: null,
             error: errorMessage,
             updated_at: new Date().toISOString(),
           })
@@ -435,9 +531,49 @@ export async function GET(request: Request) {
     }
   }
 
+  if (missingResendKey) {
+    return NextResponse.json(
+      {
+        error: "Email provider is not configured for live sends.",
+        runId,
+        todayISO,
+        dryRun,
+        dueSections,
+        ...dueDebugFields,
+        toOverride,
+        counts: {
+          eligible: payloadByUser.size,
+          attempted: attemptedCount,
+          sent: sentCount,
+          skipped_dedupe: dedupedCount,
+          failed: failedCount,
+        },
+        attemptedSends,
+        usersConsidered,
+        usersEligible: payloadByUser.size,
+        sentCount,
+        dedupedCount,
+        failedCount,
+      },
+      { status: 500 },
+    );
+  }
+
   return NextResponse.json({
     runId,
+    todayISO,
+    dryRun,
     dueSections,
+    ...dueDebugFields,
+    toOverride,
+    counts: {
+      eligible: payloadByUser.size,
+      attempted: attemptedCount,
+      sent: sentCount,
+      skipped_dedupe: dedupedCount,
+      failed: failedCount,
+    },
+    attemptedSends,
     usersConsidered,
     usersEligible: payloadByUser.size,
     sentCount,
