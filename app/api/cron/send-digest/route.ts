@@ -245,11 +245,17 @@ const sendDigestEmail = async ({
 };
 
 export async function GET(request: Request) {
+  const requestUrl = new URL(request.url);
+  const todayParam = requestUrl.searchParams.get("today");
+  const vercelEnv = process.env.VERCEL_ENV ?? null;
   const bearerToken = parseBearerToken(request.headers.get("authorization"));
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret || bearerToken !== cronSecret) {
-    return NextResponse.json({ version: "cron-digest-v2", error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Unauthorized" },
+      { status: 401 },
+    );
   }
 
   let supabase: ReturnType<typeof getServiceRoleSupabaseClient>;
@@ -258,21 +264,24 @@ export async function GET(request: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown service client configuration error";
     console.error("Missing Supabase env vars for digest cron", { error: errorMessage });
-    return NextResponse.json({ version: "cron-digest-v2", error: "Server misconfiguration" }, { status: 500 });
+    return NextResponse.json(
+      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Server misconfiguration" },
+      { status: 500 },
+    );
   }
 
   const runId = randomUUID();
-  const requestUrl = new URL(request.url);
-  const todayParam = requestUrl.searchParams.get("today");
   const dryRun = requestUrl.searchParams.get("dryRun") === "1";
   let todayISO = getUtcTodayISO();
-  const vercelEnv = process.env.VERCEL_ENV;
   const allowTodayOverride =
     typeof vercelEnv === "string" ? vercelEnv !== "production" : process.env.NODE_ENV !== "production";
 
   if (allowTodayOverride && todayParam !== null) {
     if (!isValidYYYYMMDD(todayParam)) {
-      return NextResponse.json({ version: "cron-digest-v2", error: "Invalid today. Use YYYY-MM-DD." }, { status: 400 });
+      return NextResponse.json(
+        { version: "cron-digest-v2", vercelEnv, todayParam, error: "Invalid today. Use YYYY-MM-DD." },
+        { status: 400 },
+      );
     }
     todayISO = todayParam;
   }
@@ -305,6 +314,8 @@ export async function GET(request: Request) {
   if (dueSections.length === 0) {
     return NextResponse.json({
       version: "cron-digest-v2",
+      vercelEnv,
+      todayParam,
       runId,
       todayISO,
       dryRun,
@@ -348,7 +359,7 @@ export async function GET(request: Request) {
       runId,
     });
     return NextResponse.json(
-      { version: "cron-digest-v2", error: "Failed to fetch digest candidates", runId },
+      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Failed to fetch digest candidates", runId },
       { status: 500 },
     );
   }
@@ -372,7 +383,7 @@ export async function GET(request: Request) {
       runId,
     });
     return NextResponse.json(
-      { version: "cron-digest-v2", error: "Failed to fetch eligible digest users", runId },
+      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Failed to fetch eligible digest users", runId },
       { status: 500 },
     );
   }
@@ -545,6 +556,8 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         version: "cron-digest-v2",
+        vercelEnv,
+        todayParam,
         error: "Email provider is not configured for live sends.",
         runId,
         todayISO,
@@ -572,6 +585,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     version: "cron-digest-v2",
+    vercelEnv,
+    todayParam,
     runId,
     todayISO,
     dryRun,
