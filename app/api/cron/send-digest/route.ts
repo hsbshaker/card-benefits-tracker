@@ -341,7 +341,7 @@ export async function GET(request: Request) {
   const dueCadences = dueSections.flatMap((section) => CADENCE_BY_SECTION[section]);
 
   const selectExpr =
-    "user_id, benefits!inner(display_name,cadence,value_cents,notes,cards!inner(issuer,card_name))";
+    "user_id, benefits!inner(display_name,cadence,value_cents,notes,cards!benefits_card_id_fkey!inner(issuer,card_name))";
 
   const { data: consideredRows, error: consideredError } = await supabase
     .from("user_benefits")
