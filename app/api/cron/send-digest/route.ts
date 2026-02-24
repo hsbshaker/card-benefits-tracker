@@ -366,6 +366,8 @@ export async function GET(request: Request) {
         todayISO,
         supabaseUrlPresent: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
         serviceRolePresent: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+        supabaseError: consideredError?.message ?? null,
+        supabaseDetails: consideredError ?? null,
         error: "Failed to fetch digest candidates",
         runId,
       },
