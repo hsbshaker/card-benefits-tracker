@@ -266,8 +266,11 @@ export async function GET(request: Request) {
   const todayParam = requestUrl.searchParams.get("today");
   const dryRun = requestUrl.searchParams.get("dryRun") === "1";
   let todayISO = getUtcTodayISO();
+  const vercelEnv = process.env.VERCEL_ENV;
+  const allowTodayOverride =
+    typeof vercelEnv === "string" ? vercelEnv !== "production" : process.env.NODE_ENV !== "production";
 
-  if (process.env.NODE_ENV !== "production" && todayParam !== null) {
+  if (allowTodayOverride && todayParam !== null) {
     if (!isValidYYYYMMDD(todayParam)) {
       return NextResponse.json({ version: "cron-digest-v2", error: "Invalid today. Use YYYY-MM-DD." }, { status: 400 });
     }
