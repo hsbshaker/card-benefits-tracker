@@ -359,7 +359,16 @@ export async function GET(request: Request) {
       runId,
     });
     return NextResponse.json(
-      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Failed to fetch digest candidates", runId },
+      {
+        version: "cron-digest-v2",
+        vercelEnv,
+        todayParam,
+        todayISO,
+        supabaseUrlPresent: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+        serviceRolePresent: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+        error: "Failed to fetch digest candidates",
+        runId,
+      },
       { status: 500 },
     );
   }
