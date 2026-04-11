@@ -197,6 +197,15 @@ function describeSupabaseError(error: unknown) {
   };
 }
 
+type PeriodAwareBenefitLoadRow = {
+  id: string;
+  cadence: string;
+};
+
+function hasPeriodAwareCadence(benefit: { id: string; cadence: string | null }): benefit is PeriodAwareBenefitLoadRow {
+  return typeof benefit.cadence === "string" && benefit.cadence !== "one_time";
+}
+
 function CheckmarkIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
@@ -795,7 +804,7 @@ export function BenefitsOnboarding() {
     }
 
     const refreshedUserBenefitMap = new Map(((userBenefitRows ?? []) as UserBenefitRecord[]).map((row) => [row.benefit_id, row]));
-    const periodAwareBenefits = benefits.filter((benefit) => benefit.cadence && benefit.cadence !== "one_time");
+    const periodAwareBenefits = benefits.filter(hasPeriodAwareCadence);
     const periodKeys = Array.from(
       new Set(
         periodAwareBenefits
