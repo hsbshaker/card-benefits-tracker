@@ -16,6 +16,12 @@ import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
 import { Surface } from "@/components/ui/Surface";
+import {
+  buildBenefitPeriodStatusMap,
+  buildBenefitUsageUpdate,
+  getBenefitUsedForCurrentPeriod,
+  type UserBenefitPeriodStatusRecord,
+} from "@/lib/benefits/usage-state";
 import { cn } from "@/lib/cn";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -31,7 +37,7 @@ type BenefitRow = {
   notes: string | null;
   user_benefit_id: string | null;
   remind_me: boolean;
-  used: boolean;
+  current_period_used: boolean;
 };
 
 type CardGroup = {
@@ -247,16 +253,16 @@ function ExternalLinkIcon({ className }: { className?: string }) {
 type BenefitItemProps = {
   benefit: BenefitRow;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
-  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
+  onToggleCurrentPeriodUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
 };
 
-const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onToggleUsed }: BenefitItemProps) {
+const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onToggleCurrentPeriodUsed }: BenefitItemProps) {
   const formattedAmount = useMemo(() => formatBenefitAmount(benefit.value_cents, benefit.cadence), [benefit.value_cents, benefit.cadence]);
   const descriptionText = benefit.description?.trim();
   const enrollmentUrl = useMemo(() => getEnrollmentUrl(benefit.display_name), [benefit.display_name]);
   const isEnrollmentBenefit = Boolean(enrollmentUrl);
-  const remindMeDisabled = benefit.used;
-  const isRowDimmed = isEnrollmentBenefit ? benefit.used : !benefit.remind_me;
+  const remindMeDisabled = benefit.current_period_used;
+  const isRowDimmed = isEnrollmentBenefit ? benefit.current_period_used : !benefit.remind_me;
   const [isExpanded, setIsExpanded] = useState(false);
   const canExpand = Boolean(descriptionText);
   const detailsRegionId = `benefit-details-${benefit.id}`;
@@ -313,20 +319,20 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
                 type="button"
                 className={cn(
                   "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-sm font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-                  benefit.used
+                  benefit.current_period_used
                     ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
                     : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
                 )}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onToggleUsed(benefit, !benefit.used);
+                  onToggleCurrentPeriodUsed(benefit, !benefit.current_period_used);
                 }}
               >
                 Already Enrolled
-                {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+                {benefit.current_period_used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
               </button>
 
-              {!benefit.used ? (
+              {!benefit.current_period_used ? (
                 <a
                   href={enrollmentUrl ?? "#"}
                   target="_blank"
@@ -435,7 +441,7 @@ type CardPanelProps = {
   onCadenceChange: (cardId: string, cadence: Cadence) => void;
   onTabKeyDown: (event: KeyboardEvent<HTMLButtonElement>, cardId: string, cadence: Cadence) => void;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
-  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
+  onToggleCurrentPeriodUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
   onRequestRemove: (card: CardGroup) => void;
 };
 
@@ -449,7 +455,7 @@ const CardPanel = memo(function CardPanel({
   onCadenceChange,
   onTabKeyDown,
   onToggleRemindMe,
-  onToggleUsed,
+  onToggleCurrentPeriodUsed,
   onRequestRemove,
 }: CardPanelProps) {
   const shortCardName = useMemo(() => getShortCardName(card.cardName, card.issuer), [card.cardName, card.issuer]);
@@ -577,7 +583,12 @@ const CardPanel = memo(function CardPanel({
             ) : (
               <ul className="divide-y divide-white/10">
                 {activeCadenceBenefits.map((benefit) => (
-                  <BenefitItem key={benefit.id} benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
+                  <BenefitItem
+                    key={benefit.id}
+                    benefit={benefit}
+                    onToggleRemindMe={onToggleRemindMe}
+                    onToggleCurrentPeriodUsed={onToggleCurrentPeriodUsed}
+                  />
                 ))}
               </ul>
             )}
@@ -730,6 +741,7 @@ export function BenefitsOnboarding() {
     }
 
     const benefitIds = Array.from(new Set(benefits.map((row) => row.id)));
+    const currentDate = new Date();
 
     let { data: userBenefitRows, error: userBenefitsError } = await supabase
       .from("user_benefits")
@@ -783,6 +795,39 @@ export function BenefitsOnboarding() {
     }
 
     const refreshedUserBenefitMap = new Map(((userBenefitRows ?? []) as UserBenefitRecord[]).map((row) => [row.benefit_id, row]));
+    const periodAwareBenefits = benefits.filter((benefit) => benefit.cadence && benefit.cadence !== "one_time");
+    const periodKeys = Array.from(
+      new Set(
+        periodAwareBenefits
+          .map((benefit) => buildBenefitUsageUpdate({
+            userId: user.id,
+            benefitId: benefit.id,
+            cadence: benefit.cadence,
+            nextUsed: true,
+            at: currentDate,
+          }).periodStatusUpsert?.period_key)
+          .filter((periodKey): periodKey is string => Boolean(periodKey)),
+      ),
+    );
+
+    let periodStatusMap = new Map<string, UserBenefitPeriodStatusRecord>();
+    if (periodKeys.length > 0) {
+      const { data: periodStatusRows, error: periodStatusError } = await supabase
+        .from("user_benefit_period_status")
+        .select("benefit_id, period_key, is_used, used_at")
+        .eq("user_id", user.id)
+        .in("benefit_id", benefitIds)
+        .in("period_key", periodKeys);
+
+      if (periodStatusError) {
+        console.error("Failed to load current-period benefit usage", periodStatusError);
+        setError("Could not load your benefit settings right now.");
+        setLoading(false);
+        return;
+      }
+
+      periodStatusMap = buildBenefitPeriodStatusMap((periodStatusRows ?? []) as UserBenefitPeriodStatusRecord[]);
+    }
 
     const nextCards: CardGroup[] = wallet
       .map((walletCard) => {
@@ -812,7 +857,13 @@ export function BenefitsOnboarding() {
                   : typeof userBenefit?.is_enabled === "boolean"
                     ? userBenefit.is_enabled
                     : true,
-              used: typeof userBenefit?.used === "boolean" ? userBenefit.used : false,
+              current_period_used: getBenefitUsedForCurrentPeriod({
+                benefitId: benefit.id,
+                cadence: normalizeCadence(benefit.cadence),
+                periodStatusMap,
+                at: currentDate,
+                fallbackUsed: typeof userBenefit?.used === "boolean" ? userBenefit.used : false,
+              }),
             };
           });
 
@@ -889,7 +940,7 @@ export function BenefitsOnboarding() {
   const updateRemindMe = useCallback(
     async (benefit: BenefitRow, nextValue: boolean) => {
       if (!userId) return;
-      if (benefit.used && nextValue) return;
+      if (benefit.current_period_used && nextValue) return;
 
       updateBenefitLocal(benefit.id, (prev) => ({ ...prev, remind_me: nextValue }));
 
@@ -900,7 +951,7 @@ export function BenefitsOnboarding() {
             user_id: userId,
             benefit_id: benefit.id,
             remind_me: nextValue,
-            used: benefit.used,
+            used: benefit.current_period_used,
           },
           { onConflict: "user_id,benefit_id" },
         )
@@ -918,18 +969,41 @@ export function BenefitsOnboarding() {
         ...prev,
         user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
         remind_me: savedRow?.remind_me ?? nextValue,
-        used: savedRow?.used ?? prev.used,
+        current_period_used: prev.current_period_used,
       }));
     },
     [supabase, updateBenefitLocal, userId],
   );
 
-  const updateUsed = useCallback(
+  const updateCurrentPeriodUsed = useCallback(
     async (benefit: BenefitRow, nextUsed: boolean) => {
       if (!userId) return;
       const nextRemindMe = nextUsed ? false : benefit.remind_me;
+      const usageUpdate = buildBenefitUsageUpdate({
+        userId,
+        benefitId: benefit.id,
+        cadence: benefit.cadence,
+        nextUsed,
+      });
 
-      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: nextUsed, remind_me: nextRemindMe }));
+      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, current_period_used: nextUsed, remind_me: nextRemindMe }));
+
+      if (usageUpdate.periodStatusUpsert) {
+        const { error: periodStatusError } = await supabase
+          .from("user_benefit_period_status")
+          .upsert(usageUpdate.periodStatusUpsert, { onConflict: "user_id,benefit_id,period_key" });
+
+        if (periodStatusError) {
+          const errorDetails = describeSupabaseError(periodStatusError);
+          console.error("Failed to update current-period used status", errorDetails);
+          updateBenefitLocal(benefit.id, (prev) => ({
+            ...prev,
+            current_period_used: !nextUsed,
+            remind_me: benefit.remind_me,
+          }));
+          return;
+        }
+      }
 
       const { data: savedRow, error: upsertError } = await supabase
         .from("user_benefits")
@@ -937,7 +1011,7 @@ export function BenefitsOnboarding() {
           {
             user_id: userId,
             benefit_id: benefit.id,
-            used: nextUsed,
+            used: usageUpdate.compatibilityUsed,
             remind_me: nextRemindMe,
           },
           { onConflict: "user_id,benefit_id" },
@@ -948,14 +1022,18 @@ export function BenefitsOnboarding() {
       if (upsertError) {
         const errorDetails = describeSupabaseError(upsertError);
         console.error("Failed to update used status", errorDetails);
-        updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: !nextUsed, remind_me: benefit.remind_me }));
+        updateBenefitLocal(benefit.id, (prev) => ({
+          ...prev,
+          current_period_used: !nextUsed,
+          remind_me: benefit.remind_me,
+        }));
         return;
       }
 
       updateBenefitLocal(benefit.id, (prev) => ({
         ...prev,
         user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
-        used: savedRow?.used ?? nextUsed,
+        current_period_used: nextUsed,
         remind_me: savedRow?.remind_me ?? nextRemindMe,
       }));
     },
@@ -1148,7 +1226,7 @@ export function BenefitsOnboarding() {
           user_id: resolvedUserId,
           benefit_id: benefit.id,
           remind_me: benefit.remind_me,
-          used: benefit.used,
+          used: benefit.current_period_used,
         })),
       );
 
@@ -1252,7 +1330,7 @@ export function BenefitsOnboarding() {
                       onCadenceChange={handleCadenceChange}
                       onTabKeyDown={handleTabKeyDown}
                       onToggleRemindMe={updateRemindMe}
-                      onToggleUsed={updateUsed}
+                      onToggleCurrentPeriodUsed={updateCurrentPeriodUsed}
                       onRequestRemove={handleRequestRemove}
                     />
                   );

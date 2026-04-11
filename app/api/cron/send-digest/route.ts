@@ -1,27 +1,18 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import {
+  buildMonthlyDigest,
+  DIGEST_SECTION_ORDER,
+  getDigestConsideredBenefits,
+  getDigestEligibleBenefits,
+  getDigestSectionsForMonth,
+  type DigestSection,
+  type MonthlyDigest,
+} from "@/lib/reminders/monthly-digest";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
-
-type DigestSection = "monthly" | "quarterly" | "semiannual" | "annual";
-
-type BenefitRecord = {
-  display_name: string;
-  cadence: string;
-  value_cents: number | null;
-  notes: string | null;
-  cards: {
-    issuer: string;
-    card_name: string;
-  } | null;
-};
-
-type DigestUserRow = {
-  user_id: string;
-  benefits: BenefitRecord | BenefitRecord[] | null;
-};
 
 type DigestItem = {
   cardDisplayName: string;
@@ -31,22 +22,6 @@ type DigestItem = {
 };
 
 type UserDigestPayload = Record<DigestSection, DigestItem[]>;
-
-const CADENCE_BY_SECTION: Record<DigestSection, string[]> = {
-  monthly: ["monthly"],
-  quarterly: ["quarterly"],
-  semiannual: ["semi_annual", "semiannual"],
-  annual: ["annual"],
-};
-
-const LEAD_DAYS_BY_SECTION: Record<DigestSection, number[]> = {
-  monthly: [7, 0],
-  quarterly: [14, 7, 0],
-  semiannual: [14, 7, 0],
-  annual: [60, 30, 14, 0],
-};
-
-const SECTION_ORDER: DigestSection[] = ["monthly", "quarterly", "semiannual", "annual"];
 
 const parseBearerToken = (header: string | null) => {
   if (!header) {
@@ -73,85 +48,42 @@ const safeErrorMessage = (error: unknown) => {
 const toUtcDateOnly = (value: Date) =>
   new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
 
+const toUtcMonthStart = (value: Date) =>
+  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
+
 const dateKey = (value: Date) => value.toISOString().slice(0, 10);
-
-const endOfMonthUtc = (value: Date) =>
-  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0));
-
-const endOfQuarterUtc = (value: Date) => {
-  const quarterEndMonth = Math.floor(value.getUTCMonth() / 3) * 3 + 2;
-  return new Date(Date.UTC(value.getUTCFullYear(), quarterEndMonth + 1, 0));
-};
-
-const endOfSemiannualUtc = (todayUtcDateOnly: Date) => {
-  const year = todayUtcDateOnly.getUTCFullYear();
-  const jun30 = new Date(Date.UTC(year, 5, 30));
-  const dec31 = new Date(Date.UTC(year, 11, 31));
-  return todayUtcDateOnly.getTime() <= jun30.getTime() ? jun30 : dec31;
-};
-
-const endOfYearUtc = (value: Date) => new Date(Date.UTC(value.getUTCFullYear(), 11, 31));
-
-type DueSectionsDebug = {
-  endOfMonthISO: string;
-  endOfQuarterISO: string;
-  endOfSemiannualISO: string;
-  endOfAnnualISO: string;
-  daysUntilMonthEnd: number;
-  daysUntilQuarterEnd: number;
-  daysUntilSemiannualEnd: number;
-  daysUntilAnnualEnd: number;
-  leadTimesBySection: Record<DigestSection, number[]>;
-};
-
-const daysBetweenUtcDateOnly = (fromDate: Date, toDate: Date) =>
-  Math.round((toDate.getTime() - fromDate.getTime()) / 86400000);
-
-const dueSectionsToday = (todayUtcDateOnly: Date): { dueSections: DigestSection[]; debug: DueSectionsDebug } => {
-  const boundaries: Record<DigestSection, Date> = {
-    monthly: endOfMonthUtc(todayUtcDateOnly),
-    quarterly: endOfQuarterUtc(todayUtcDateOnly),
-    semiannual: endOfSemiannualUtc(todayUtcDateOnly),
-    annual: endOfYearUtc(todayUtcDateOnly),
-  };
-
-  const daysUntilBySection: Record<DigestSection, number> = {
-    monthly: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.monthly),
-    quarterly: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.quarterly),
-    semiannual: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.semiannual),
-    annual: daysBetweenUtcDateOnly(todayUtcDateOnly, boundaries.annual),
-  };
-
-  const dueSections = SECTION_ORDER.filter((section) => LEAD_DAYS_BY_SECTION[section].includes(daysUntilBySection[section]));
-
-  return {
-    dueSections,
-    debug: {
-      endOfMonthISO: dateKey(boundaries.monthly),
-      endOfQuarterISO: dateKey(boundaries.quarterly),
-      endOfSemiannualISO: dateKey(boundaries.semiannual),
-      endOfAnnualISO: dateKey(boundaries.annual),
-      daysUntilMonthEnd: daysUntilBySection.monthly,
-      daysUntilQuarterEnd: daysUntilBySection.quarterly,
-      daysUntilSemiannualEnd: daysUntilBySection.semiannual,
-      daysUntilAnnualEnd: daysUntilBySection.annual,
-      leadTimesBySection: LEAD_DAYS_BY_SECTION,
-    },
-  };
-};
-
-const cadenceToSection = (cadence: string): DigestSection | null => {
-  if (CADENCE_BY_SECTION.monthly.includes(cadence)) return "monthly";
-  if (CADENCE_BY_SECTION.quarterly.includes(cadence)) return "quarterly";
-  if (CADENCE_BY_SECTION.semiannual.includes(cadence)) return "semiannual";
-  if (CADENCE_BY_SECTION.annual.includes(cadence)) return "annual";
-  return null;
-};
 
 const buildSubject = (sections: DigestSection[]) => {
   const sectionTitles = sections.map((section) => section[0].toUpperCase() + section.slice(1));
   return `Your card benefits reminder digest (${sectionTitles.join(", ")})`;
 };
+
+const toPayload = (digest: MonthlyDigest): UserDigestPayload => ({
+  monthly: digest.sections.monthly.map((item) => ({
+    cardDisplayName: item.cardDisplayName,
+    benefitDisplayName: item.benefitDisplayName,
+    valueCents: item.valueCents,
+    notes: item.notes,
+  })),
+  quarterly: digest.sections.quarterly.map((item) => ({
+    cardDisplayName: item.cardDisplayName,
+    benefitDisplayName: item.benefitDisplayName,
+    valueCents: item.valueCents,
+    notes: item.notes,
+  })),
+  semiannual: digest.sections.semiannual.map((item) => ({
+    cardDisplayName: item.cardDisplayName,
+    benefitDisplayName: item.benefitDisplayName,
+    valueCents: item.valueCents,
+    notes: item.notes,
+  })),
+  annual: digest.sections.annual.map((item) => ({
+    cardDisplayName: item.cardDisplayName,
+    benefitDisplayName: item.benefitDisplayName,
+    valueCents: item.valueCents,
+    notes: item.notes,
+  })),
+});
 
 const renderDigestText = (payload: UserDigestPayload, sections: DigestSection[]) => {
   const lines: string[] = ["You have upcoming card benefit deadlines:", ""];
@@ -253,7 +185,7 @@ export async function GET(request: Request) {
 
   if (!cronSecret || bearerToken !== cronSecret) {
     return NextResponse.json(
-      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Unauthorized" },
+      { version: "cron-digest-v3", vercelEnv, todayParam, error: "Unauthorized" },
       { status: 401 },
     );
   }
@@ -265,7 +197,7 @@ export async function GET(request: Request) {
     const errorMessage = error instanceof Error ? error.message : "Unknown service client configuration error";
     console.error("Missing Supabase env vars for digest cron", { error: errorMessage });
     return NextResponse.json(
-      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Server misconfiguration" },
+      { version: "cron-digest-v3", vercelEnv, todayParam, error: "Server misconfiguration" },
       { status: 500 },
     );
   }
@@ -279,7 +211,7 @@ export async function GET(request: Request) {
   if (allowTodayOverride && todayParam !== null) {
     if (!isValidYYYYMMDD(todayParam)) {
       return NextResponse.json(
-        { version: "cron-digest-v2", vercelEnv, todayParam, error: "Invalid today. Use YYYY-MM-DD." },
+        { version: "cron-digest-v3", vercelEnv, todayParam, error: "Invalid today. Use YYYY-MM-DD." },
         { status: 400 },
       );
     }
@@ -287,154 +219,48 @@ export async function GET(request: Request) {
   }
 
   const nowUtc = new Date();
-  const isProduction = process.env.NODE_ENV === "production";
-  const todayUtcDateOnly = toUtcDateOnly(new Date(`${todayISO}T00:00:00.000Z`));
-  const todayUtcKey = dateKey(todayUtcDateOnly);
-  const dueSectionsResult = dueSectionsToday(todayUtcDateOnly);
-  const dueSections = dueSectionsResult.dueSections;
-  const dueDebugFields = isProduction
-    ? {}
-    : {
-        endOfMonthISO: dueSectionsResult.debug.endOfMonthISO,
-        endOfQuarterISO: dueSectionsResult.debug.endOfQuarterISO,
-        endOfSemiannualISO: dueSectionsResult.debug.endOfSemiannualISO,
-        endOfAnnualISO: dueSectionsResult.debug.endOfAnnualISO,
-        daysUntilMonthEnd: dueSectionsResult.debug.daysUntilMonthEnd,
-        daysUntilQuarterEnd: dueSectionsResult.debug.daysUntilQuarterEnd,
-        daysUntilSemiannualEnd: dueSectionsResult.debug.daysUntilSemiannualEnd,
-        daysUntilAnnualEnd: dueSectionsResult.debug.daysUntilAnnualEnd,
-        leadTimesBySection: dueSectionsResult.debug.leadTimesBySection,
-      };
+  const monthStart = toUtcMonthStart(toUtcDateOnly(new Date(`${todayISO}T00:00:00.000Z`)));
+  const monthKey = dateKey(monthStart).slice(0, 7);
+  const monthStartISO = dateKey(monthStart);
+  const dueSections = getDigestSectionsForMonth(monthStart);
   const emailToOverride = process.env.EMAIL_TO_OVERRIDE?.trim() || null;
   const toOverride = emailToOverride !== null;
   const resendApiKey = process.env.RESEND_API_KEY;
   const resend = resendApiKey ? new Resend(resendApiKey) : null;
   const emailFrom = process.env.EMAIL_FROM || "Memento <onboarding@resend.dev>";
 
-  if (dueSections.length === 0) {
-    return NextResponse.json({
-      version: "cron-digest-v2",
-      vercelEnv,
-      todayParam,
-      runId,
-      todayISO,
-      dryRun,
-      dueSections,
-      ...dueDebugFields,
-      toOverride,
-      counts: {
-        eligible: 0,
-        attempted: 0,
-        sent: 0,
-        skipped_dedupe: 0,
-        failed: 0,
-      },
-      attemptedSends: [],
-      usersConsidered: 0,
-      usersEligible: 0,
-      sentCount: 0,
-      dedupedCount: 0,
-      failedCount: 0,
+  let consideredBenefits;
+  try {
+    consideredBenefits = await getDigestConsideredBenefits({
+      monthStart,
+      supabase,
     });
-  }
-
-  const dueCadences = dueSections.flatMap((section) => CADENCE_BY_SECTION[section]);
-
-  const selectExpr =
-    "user_id, benefits!inner(display_name,cadence,value_cents,notes,cards!benefits_card_id_fkey!inner(issuer,card_name))";
-
-  const { data: consideredRows, error: consideredError } = await supabase
-    .from("user_benefits")
-    .select(selectExpr)
-    .eq("remind_me", true)
-    .in("benefits.cadence", dueCadences)
-    .returns<DigestUserRow[]>();
-
-  if (consideredError) {
-    console.error("Failed to fetch considered digest users", {
-      code: consideredError.code,
-      message: consideredError.message,
-      details: consideredError.details,
-      hint: consideredError.hint,
-      runId,
-    });
+  } catch (error) {
+    const errorMessage = safeErrorMessage(error);
+    console.error("Failed to fetch considered digest candidates", { error: errorMessage, runId, monthKey });
     return NextResponse.json(
-      {
-        version: "cron-digest-v2",
-        vercelEnv,
-        todayParam,
-        todayISO,
-        supabaseUrlPresent: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
-        serviceRolePresent: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-        supabaseError: consideredError?.message ?? null,
-        supabaseDetails: consideredError ?? null,
-        error: "Failed to fetch digest candidates",
-        runId,
-      },
+      { version: "cron-digest-v3", vercelEnv, todayParam, error: "Failed to fetch digest candidates", runId, monthKey },
       { status: 500 },
     );
   }
 
-  const usersConsidered = new Set((consideredRows ?? []).map((row) => row.user_id)).size;
-
-  const { data: eligibleRows, error: eligibleError } = await supabase
-    .from("user_benefits")
-    .select(selectExpr)
-    .eq("remind_me", true)
-    .eq("used", false)
-    .in("benefits.cadence", dueCadences)
-    .returns<DigestUserRow[]>();
-
-  if (eligibleError) {
-    console.error("Failed to fetch eligible digest users", {
-      code: eligibleError.code,
-      message: eligibleError.message,
-      details: eligibleError.details,
-      hint: eligibleError.hint,
-      runId,
+  let eligibleBenefits;
+  try {
+    eligibleBenefits = await getDigestEligibleBenefits({
+      monthStart,
+      supabase,
     });
+  } catch (error) {
+    const errorMessage = safeErrorMessage(error);
+    console.error("Failed to fetch eligible digest benefits", { error: errorMessage, runId, monthKey });
     return NextResponse.json(
-      { version: "cron-digest-v2", vercelEnv, todayParam, error: "Failed to fetch eligible digest users", runId },
+      { version: "cron-digest-v3", vercelEnv, todayParam, error: "Failed to fetch eligible digest users", runId, monthKey },
       { status: 500 },
     );
   }
 
-  const payloadByUser = new Map<string, UserDigestPayload>();
-
-  for (const row of eligibleRows ?? []) {
-    const benefitRows = Array.isArray(row.benefits) ? row.benefits : row.benefits ? [row.benefits] : [];
-    for (const benefit of benefitRows) {
-      const cadence = benefit.cadence;
-      if (!cadence) {
-        continue;
-      }
-
-      const section = cadenceToSection(cadence);
-      if (!section || !dueSections.includes(section)) {
-        continue;
-      }
-
-      const card = benefit.cards;
-      const cardDisplayName = card ? `${card.issuer} ${card.card_name}` : "Unknown Card";
-      const item: DigestItem = {
-        cardDisplayName,
-        benefitDisplayName: benefit.display_name ?? "Unnamed Benefit",
-        valueCents: benefit.value_cents ?? null,
-        notes: benefit.notes ?? null,
-      };
-
-      if (!payloadByUser.has(row.user_id)) {
-        payloadByUser.set(row.user_id, {
-          monthly: [],
-          quarterly: [],
-          semiannual: [],
-          annual: [],
-        });
-      }
-
-      payloadByUser.get(row.user_id)?.[section].push(item);
-    }
-  }
+  const usersConsidered = new Set(consideredBenefits.map((benefit) => benefit.userId)).size;
+  const digestsByUser = buildMonthlyDigest(eligibleBenefits, monthStart);
 
   let sentCount = 0;
   let dedupedCount = 0;
@@ -443,13 +269,14 @@ export async function GET(request: Request) {
   let missingResendKey = false;
   const attemptedSends: Array<{ userId: string; toEmailUsed: string | null; status: "sent" | "failed" }> = [];
 
-  for (const [userId, payload] of payloadByUser.entries()) {
-    const populatedSections = SECTION_ORDER.filter((section) => payload[section].length > 0);
+  for (const [userId, digest] of digestsByUser.entries()) {
+    const populatedSections = DIGEST_SECTION_ORDER.filter((section) => digest.sections[section].length > 0);
     if (populatedSections.length === 0) {
       continue;
     }
 
-    const dedupeKey = `${userId}:${todayUtcKey}`;
+    const payload = toPayload(digest);
+    const dedupeKey = `${userId}:${digest.monthKey}`;
     const subject = buildSubject(populatedSections);
 
     const { data: insertedLog, error: insertError } = await supabase
@@ -457,7 +284,7 @@ export async function GET(request: Request) {
       .insert({
         user_id: userId,
         run_id: runId,
-        send_date: todayUtcKey,
+        send_date: monthStartISO,
         dedupe_key: dedupeKey,
         status: "attempted",
         planned_send_at: nowUtc.toISOString(),
@@ -476,6 +303,7 @@ export async function GET(request: Request) {
       console.error("Failed to claim email_send_log row", {
         userId,
         runId,
+        monthKey,
         code: insertError.code,
         message: insertError.message,
       });
@@ -492,7 +320,7 @@ export async function GET(request: Request) {
         userId,
         emailToOverride,
       });
-      console.info("[digest] resolved recipient", { userId, toEmailUsed, toOverride });
+      console.info("[digest] resolved recipient", { userId, toEmailUsed, toOverride, monthKey });
 
       let providerMessageId: string | null = null;
       if (!dryRun) {
@@ -529,6 +357,7 @@ export async function GET(request: Request) {
             userId,
             logId,
             runId,
+            monthKey,
             code: markSentError.code,
             message: markSentError.message,
           });
@@ -558,54 +387,25 @@ export async function GET(request: Request) {
       console.error("Failed to send digest email", {
         userId,
         runId,
+        monthKey,
         error: errorMessage,
       });
     }
   }
 
-  if (missingResendKey) {
-    return NextResponse.json(
-      {
-        version: "cron-digest-v2",
-        vercelEnv,
-        todayParam,
-        error: "Email provider is not configured for live sends.",
-        runId,
-        todayISO,
-        dryRun,
-        dueSections,
-        ...dueDebugFields,
-        toOverride,
-        counts: {
-          eligible: payloadByUser.size,
-          attempted: attemptedCount,
-          sent: sentCount,
-          skipped_dedupe: dedupedCount,
-          failed: failedCount,
-        },
-        attemptedSends,
-        usersConsidered,
-        usersEligible: payloadByUser.size,
-        sentCount,
-        dedupedCount,
-        failedCount,
-      },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({
-    version: "cron-digest-v2",
+  const responseBody = {
+    version: "cron-digest-v3",
     vercelEnv,
     todayParam,
     runId,
     todayISO,
+    monthKey,
+    monthStartISO,
     dryRun,
     dueSections,
-    ...dueDebugFields,
     toOverride,
     counts: {
-      eligible: payloadByUser.size,
+      eligible: digestsByUser.size,
       attempted: attemptedCount,
       sent: sentCount,
       skipped_dedupe: dedupedCount,
@@ -613,9 +413,21 @@ export async function GET(request: Request) {
     },
     attemptedSends,
     usersConsidered,
-    usersEligible: payloadByUser.size,
+    usersEligible: digestsByUser.size,
     sentCount,
     dedupedCount,
     failedCount,
-  });
+  };
+
+  if (missingResendKey) {
+    return NextResponse.json(
+      {
+        ...responseBody,
+        error: "Email provider is not configured for live sends.",
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json(responseBody);
 }
