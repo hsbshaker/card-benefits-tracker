@@ -15,7 +15,7 @@ type Tab = {
 };
 
 const tabs: Tab[] = [
-  { id: "dashboard", label: "Dashboard (coming soon)", href: "/dashboard", comingSoon: true },
+  { id: "dashboard", label: "Dashboard", href: "/dashboard", comingSoon: false },
   { id: "wallet", label: "Wallet Builder", href: "/onboarding/build-your-lineup", comingSoon: false },
   { id: "reminders", label: "Personalize Reminders", href: "/onboarding/benefits", comingSoon: false },
 ];

@@ -1,7 +1,7 @@
-import { AppShell } from "@/components/ui/AppShell";
+import { BenefitsOnboarding } from "@/app/onboarding/benefits/components/benefits-onboarding";
 
 export const dynamic = "force-dynamic";
 
 export default function DashboardPage() {
-  return <AppShell containerClassName="py-8 sm:py-10"><div /></AppShell>;
+  return <BenefitsOnboarding variant="dashboard" />;
 }

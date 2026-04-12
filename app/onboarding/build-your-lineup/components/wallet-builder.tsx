@@ -33,6 +33,7 @@ type WalletCard = {
   display_name: string | null;
   issuer: string;
   network: string | null;
+  card_status?: "active" | "no_trackable_benefits" | null;
 };
 
 type WalletCardRow = {
@@ -422,6 +423,7 @@ export function WalletBuilder() {
 
   const addCardFromSearch = useCallback(
     async (card: CardResult) => {
+      if (card.card_status !== "active") return;
       if (walletCardIds.has(card.id)) return;
 
       const optimisticInstanceId = `optimistic-${card.id}-${Date.now()}`;
