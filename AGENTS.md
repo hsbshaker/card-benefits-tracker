@@ -1,117 +1,51 @@
 # AGENTS.md
 
-## Project
-Memento is a credit card benefits tracker focused on “use it or lose it” benefits like statement credits, free night awards, airline fee credits, companion certificates, and similar time-bound benefits.
+## Product: Memento
 
-Core principles:
-- Free forever
-- No bank login / no Plaid
-- No card numbers required
-- Users self-enter cards and track benefits manually
-- Product should feel premium, clean, and simple
+Memento is a premium credit card benefits tracker focused on “use it or lose it” value.
 
-## Product Priorities
-Current priorities, in order:
-1. Reliable canonical benefit data model
-2. Clean user onboarding and wallet building
-3. Accurate period/reset logic for time-bound benefits
-4. Persistent user-level benefit state
-5. Reminder and expiration workflows
-6. Additional issuers after Amex is stable
+Core constraints:
+- No bank login
+- No Plaid
+- No card numbers
+- Users manually add cards
+- System preloads benefits, user confirms
 
-## Current Canonical Data Model
-Use these canonical tables for product-facing benefit/catalog work:
-- `public.cards`
-- `public.benefits`
+## Product Goal
 
-Use this table for backend/history only unless explicitly asked:
-- `public.benefit_history`
+Make benefit tracking feel:
+- effortless
+- fast
+- premium
+- obvious
 
-Important field conventions:
-- `cards.card_status`:
-  - `active`
-  - `no_trackable_benefits`
-  - `retired`
-- `benefits.track_in_memento`:
-  - `yes`
-  - `later`
-  - `no`
+Users should instantly understand:
+1. What value they have
+2. What is expiring
+3. What to do next
 
-User-facing UI should generally show only:
-- cards with `card_status in ('active', 'no_trackable_benefits')`
-- benefits with `track_in_memento = 'yes'`
+## UX Mandate (CRITICAL)
 
-## Current Phase Boundaries
-Phase A:
-- App reads from canonical `cards` and `benefits`
+Do NOT preserve existing UI or flows.
 
-Phase B:
-- Time-period logic for:
-  - monthly
-  - quarterly
-  - semiannual
-  - annual
+Always:
+- prefer better UX over incremental changes
+- reduce steps
+- reduce decisions
+- reduce cognitive load
 
-Phase C:
-- User-level used/remind state
+Target experience:
+“Wow this was incredibly easy”
 
-Explicitly deferred for later:
-- anniversary-based resets
-- multi_year product logic
-- per_booking product logic
-- spend-threshold logic
-- benefit history UI
-- reminder delivery jobs
-- issuer expansion beyond Amex
+## Design Principles
 
-## Engineering Preferences
-- Prefer narrow, implementation-focused changes
-- Reuse existing Supabase patterns already in the repo
-- Do not introduce new abstractions unless clearly necessary
-- Preserve current UI styling and UX unless asked otherwise
-- Prefer additive migrations over redesigns
-- Do not silently invent business logic for missing data
-- Keep importer logic and app logic separate
+- Show value immediately
+- Prioritize expiring benefits
+- Keep interfaces calm
+- Use strong defaults
+- Hide complexity (progressive disclosure)
+- One clear action per step
 
-## Data / Import Rules
-- The CSV is a transport/research artifact, not the source of truth
-- The DB schema is the source of truth
-- Importer should remain deterministic
-- `benefit_hash` is based on material fields only
-- Do not hand-edit imported production data in app code
+## Final Standard
 
-## UI / UX Rules
-- Premium, clean, minimal feel
-- Avoid clutter and over-explaining
-- Preserve current layouts when adding logic
-- Handle cards with no trackable benefits gracefully
-- User-facing benefit lists should not expose `later` or `no` benefits unless explicitly requested
-
-## Codex Working Style
-When working on non-trivial tasks:
-1. Inspect the repo first
-2. Identify files likely to change
-3. Propose a short implementation plan
-4. Make the smallest safe change that accomplishes the task
-5. Summarize:
-   - files changed
-   - key queries/logic added
-   - assumptions
-   - deferred follow-ups
-
-Avoid:
-- broad refactors
-- schema changes outside the asked scope
-- touching importer logic when working on app UI unless explicitly requested
-- changing unrelated files
-
-## Build / Deploy Notes
-- Keep Vercel builds clean
-- Avoid letting standalone scripts break Next.js app builds
-- Prefer explicit typing for backend/import scripts
-- Generated preview artifacts should remain ignored
-
-## Git / Repo Hygiene
-- Do not commit local CSV research artifacts unless explicitly asked
-- Do not commit generated preview JSON artifacts
-- Keep changes scoped and reviewable
+Powerful + effortless + premium
