@@ -24,6 +24,7 @@ import {
 } from "@/lib/benefits/usage-state";
 import { getBenefitPeriodUrgency, getCurrentBenefitPeriod } from "@/lib/benefit-periods";
 import { cn } from "@/lib/cn";
+import { getIssuerDisplayName, getIssuerShortLabel } from "@/lib/format-card";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Cadence = "monthly" | "quarterly" | "semiannual" | "annual" | "multi_year" | "one_time" | "per_booking";
@@ -55,9 +56,8 @@ type CardGroup = {
 type UserBenefitRecord = {
   id: string;
   benefit_id: string;
-  remind_me?: boolean | null;
-  used?: boolean | null;
-  is_enabled?: boolean | null;
+  remind_me: boolean;
+  used: boolean;
 };
 
 type SupabaseErrorLike = {
@@ -70,21 +70,6 @@ type SupabaseErrorLike = {
 const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semiannual", "annual", "multi_year", "one_time", "per_booking"];
 const BENEFIT_AMOUNT_ACCENT_CLASS = "text-[#F7C948]";
 const BELL_COLUMN_WIDTH_CLASS = "w-16";
-const ISSUER_DISPLAY_MAP: Record<string, string> = {
-  amex: "American Express",
-  "american express": "American Express",
-  chase: "Chase",
-  citi: "Citi",
-  "capital-one": "Capital One",
-  "capital one": "Capital One",
-  discover: "Discover",
-  wellsfargo: "Wells Fargo",
-  "wells fargo": "Wells Fargo",
-  usbank: "US Bank",
-  "us bank": "US Bank",
-  bankofamerica: "Bank of America",
-  "bank of america": "Bank of America",
-};
 const NETWORK_DISPLAY_MAP: Record<string, string> = {
   amex: "Amex",
   "american express": "Amex",
@@ -197,11 +182,6 @@ function toTitleCase(raw: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function normalizeIssuerDisplayName(rawIssuer: string) {
-  const normalizedKey = rawIssuer.trim().toLowerCase();
-  return ISSUER_DISPLAY_MAP[normalizedKey] ?? toTitleCase(rawIssuer);
-}
-
 function normalizeNetworkDisplayName(rawNetwork: string | null) {
   if (!rawNetwork) return null;
   const normalizedKey = rawNetwork.trim().toLowerCase();
@@ -218,12 +198,6 @@ function getShortCardName(displayName: string, issuer: string) {
     return displayName.replace(issuer, "").trim();
   }
   return displayName;
-}
-
-function getIssuerShortLabel(issuer: string) {
-  const value = (issuer || "").toLowerCase();
-  if (value.includes("american express")) return "AMEX";
-  return issuer;
 }
 
 function describeSupabaseError(error: unknown) {
@@ -856,7 +830,7 @@ export function BenefitsOnboarding({ variant = "onboarding" }: BenefitsOnboardin
           cardId: walletCard.cards.id,
           cardName: walletCard.cards.display_name ?? walletCard.cards.card_name,
           productKey: walletCard.cards.product_key,
-          issuer: normalizeIssuerDisplayName(walletCard.cards.issuer),
+          issuer: getIssuerDisplayName(walletCard.cards.issuer),
           network: normalizeNetworkDisplayName(walletCard.cards.network),
           cardStatus: walletCard.cards.card_status,
           benefits: [],
@@ -888,7 +862,7 @@ export function BenefitsOnboarding({ variant = "onboarding" }: BenefitsOnboardin
 
     let { data: userBenefitRows, error: userBenefitsError } = await supabase
       .from("user_benefits")
-      .select("*")
+      .select("id, benefit_id, remind_me, used")
       .eq("user_id", user.id)
       .in("benefit_id", benefitIds);
 
@@ -922,7 +896,7 @@ export function BenefitsOnboarding({ variant = "onboarding" }: BenefitsOnboardin
 
       const refetch = await supabase
         .from("user_benefits")
-        .select("*")
+        .select("id, benefit_id, remind_me, used")
         .eq("user_id", user.id)
         .in("benefit_id", benefitIds);
 
@@ -1013,12 +987,7 @@ export function BenefitsOnboarding({ variant = "onboarding" }: BenefitsOnboardin
               reset_timing: benefit.reset_timing,
               notes: benefit.notes,
               user_benefit_id: userBenefit?.id ?? null,
-              remind_me:
-                typeof userBenefit?.remind_me === "boolean"
-                  ? userBenefit.remind_me
-                  : typeof userBenefit?.is_enabled === "boolean"
-                    ? userBenefit.is_enabled
-                    : true,
+              remind_me: userBenefit?.remind_me ?? true,
               current_period_used: getBenefitUsedForCurrentPeriod({
                 benefitId: benefit.id,
                 cadence: normalizeCadence(benefit.cadence),
@@ -1033,7 +1002,7 @@ export function BenefitsOnboarding({ variant = "onboarding" }: BenefitsOnboardin
           cardId: walletCard.cards.id,
           cardName: walletCard.cards.display_name ?? walletCard.cards.card_name,
           productKey: walletCard.cards.product_key,
-          issuer: normalizeIssuerDisplayName(walletCard.cards.issuer),
+          issuer: getIssuerDisplayName(walletCard.cards.issuer),
           network: normalizeNetworkDisplayName(walletCard.cards.network),
           cardStatus: walletCard.cards.card_status,
           benefits: benefitsForCard,

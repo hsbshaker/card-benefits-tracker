@@ -1,5 +1,6 @@
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { getCleanCardName, getIssuerShortLabel } from "@/lib/format-card";
 
 export type CardResult = {
   id: string;
@@ -24,29 +25,13 @@ type CardResultsListProps = {
 };
 
 const rowTransition = "transition motion-safe:duration-200 ease-out";
-function getCleanCardName(card: CardResult) {
-  let name = card.display_name ?? card.card_name;
-  if (name.startsWith("American Express ")) {
-    name = name.slice("American Express ".length);
-  }
-  if (name.endsWith(" Card")) {
-    name = name.slice(0, -" Card".length);
-  }
-  return name;
-}
-
-function getIssuerDisplayName(issuer: string) {
-  const normalizedIssuer = issuer.trim().toLowerCase();
-  if (normalizedIssuer === "american express" || normalizedIssuer === "amex") return "AMEX";
-  return issuer;
-}
 
 function getCardStatusCopy(card: CardResult) {
   if (card.card_status === "no_trackable_benefits") {
     return "No trackable benefits yet";
   }
 
-  return getIssuerDisplayName(card.issuer);
+  return getIssuerShortLabel(card.issuer);
 }
 
 export function CardResultsList({
@@ -80,7 +65,7 @@ export function CardResultsList({
               const isSaved = savedCardIds.has(card.id);
               const isTrackable = card.card_status === "active";
               const isDisabled = isSaved || !isTrackable;
-              const label = getCleanCardName(card);
+              const label = getCleanCardName(card.display_name, card.card_name);
               const issuerLabel = getCardStatusCopy(card);
 
               const handleRowClick = () => {

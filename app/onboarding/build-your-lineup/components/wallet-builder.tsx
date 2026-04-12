@@ -11,6 +11,7 @@ import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { getCleanCardName, getIssuerShortLabel } from "@/lib/format-card";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CardResult, CardResultsList } from "./card-results-list";
 
@@ -57,29 +58,6 @@ const ISSUER_FILTER_OPTIONS: IssuerFilterOption[] = [
   { id: "Citi", label: "Citi", searchTokens: ["citi"] },
 ];
 
-function getCleanCardName(displayName: string | null, cardName: string) {
-  let name = displayName ?? cardName;
-  if (name.startsWith("American Express ")) {
-    name = name.slice("American Express ".length);
-  }
-  if (name.endsWith(" Card")) {
-    name = name.slice(0, -" Card".length);
-  }
-  return name;
-}
-
-function getCanonicalIssuerLabel(issuer: string) {
-  const normalizedIssuer = normalizeValue(issuer);
-  if (normalizedIssuer === "american express" || normalizedIssuer === "amex") return "AMEX";
-  if (normalizedIssuer === "capital one" || normalizedIssuer === "capitalone") return "Capital One";
-  if (normalizedIssuer === "chase") return "Chase";
-  if (normalizedIssuer === "citi") return "Citi";
-  return issuer.trim();
-}
-
-function getIssuerDisplayName(issuer: string) {
-  return getCanonicalIssuerLabel(issuer);
-}
 
 function getCardSortName(displayName: string | null, cardName: string) {
   return getCleanCardName(displayName, cardName).toLowerCase().trim();
@@ -90,7 +68,7 @@ function normalizeValue(value: string | null | undefined) {
 }
 
 function getIssuerSearchTokens(issuer: string) {
-  const canonicalIssuer = getCanonicalIssuerLabel(issuer);
+  const canonicalIssuer = getIssuerShortLabel(issuer);
   const knownOption = ISSUER_FILTER_OPTIONS.find((option) => option.id === canonicalIssuer);
   if (knownOption) return knownOption.searchTokens;
   const normalizedIssuer = normalizeValue(issuer);
@@ -112,7 +90,7 @@ function filterAndRankCards(cards: CardResult[], query: string, selectedIssuers:
 
   return cards
     .filter((card) => {
-      if (hasIssuerFilter && !selectedIssuerSet.has(getCanonicalIssuerLabel(card.issuer))) return false;
+      if (hasIssuerFilter && !selectedIssuerSet.has(getIssuerShortLabel(card.issuer))) return false;
       return true;
     })
     .map((card) => {
@@ -194,7 +172,7 @@ export function WalletBuilder() {
   const hasActiveFilters = selectedIssuerFilters.length > 0;
   const shouldShowResults = !isFilterPopoverOpen && isResultsOpen && normalizedQuery.length >= 1;
   const availableIssuerSet = useMemo(
-    () => new Set(cardsIndex.map((card) => getCanonicalIssuerLabel(card.issuer))),
+    () => new Set(cardsIndex.map((card) => getIssuerShortLabel(card.issuer))),
     [cardsIndex],
   );
   const issuerFilterOptions = useMemo(
@@ -917,7 +895,7 @@ export function WalletBuilder() {
                           {getCleanCardName(card.display_name, card.card_name)}
                         </p>
                         <p className="mt-0.5 text-sm text-white/55">
-                          {getIssuerDisplayName(card.issuer)}
+                          {getIssuerShortLabel(card.issuer)}
                         </p>
                       </div>
                       <button
