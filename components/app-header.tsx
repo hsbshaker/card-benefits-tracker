@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
-type TabId = "wallet" | "dashboard" | "reminders";
+type TabId = "wallet" | "home" | "reminders";
 
 type Tab = {
   id: TabId;
@@ -15,7 +15,7 @@ type Tab = {
 };
 
 const tabs: Tab[] = [
-  { id: "dashboard", label: "Dashboard", href: "/dashboard", comingSoon: false },
+  { id: "home", label: "Home", href: "/home", comingSoon: false },
   { id: "wallet", label: "Wallet Builder", href: "/onboarding/build-your-lineup", comingSoon: false },
   { id: "reminders", label: "Personalize Reminders", href: "/onboarding/benefits", comingSoon: false },
 ];
@@ -29,7 +29,7 @@ export function AppHeader() {
   const showNav = !pathname.startsWith("/onboarding/success");
 
   const activeTab = useMemo<TabId | null>(() => {
-    if (pathname.startsWith("/dashboard")) return "dashboard";
+    if (pathname.startsWith("/home")) return "home";
     if (pathname.startsWith("/onboarding/build-your-lineup") || pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/onboarding/benefits") || pathname.startsWith("/benefits")) return "reminders";
     return null;
@@ -38,7 +38,7 @@ export function AppHeader() {
   const mobilePageTitle = useMemo(() => {
     if (activeTab === "wallet") return "Wallet Builder";
     if (activeTab === "reminders") return "Personalize Reminders";
-    if (activeTab === "dashboard") return "Dashboard";
+    if (activeTab === "home") return "Home";
     return "Memento";
   }, [activeTab]);
 

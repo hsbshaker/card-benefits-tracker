@@ -1,13 +1,21 @@
 import { redirect } from "next/navigation";
+import { HomeScreen } from "@/components/home/HomeScreen";
+import { buildHomeFeed } from "@/lib/home/build-home-feed";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type HomePageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+export const dynamic = "force-dynamic";
 
-export default async function HomePage({ searchParams }: HomePageProps) {
-  const params = await searchParams;
-  const duplicate = params.duplicate;
-  const query = typeof duplicate === "string" ? `?duplicate=${encodeURIComponent(duplicate)}` : "";
+export default async function HomePage() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  redirect(`/dashboard${query}`);
+  if (!user) {
+    redirect("/login");
+  }
+
+  const initialFeed = await buildHomeFeed(user.id);
+
+  return <HomeScreen initialFeed={initialFeed} />;
 }
