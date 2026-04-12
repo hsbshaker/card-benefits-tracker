@@ -8,7 +8,6 @@ export type CardResult = {
   card_name: string;
   display_name: string | null;
   network: string | null;
-  product_key: string | null;
   card_status: "active" | "no_trackable_benefits";
 };
 

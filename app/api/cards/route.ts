@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("cards")
-    .select("id, issuer, card_name, display_name, network, product_key, card_status")
+    .select("id, issuer, card_name, display_name, network, card_status")
     .in("card_status", ["active", "no_trackable_benefits"])
     .order("card_status", { ascending: true })
     .order("display_name", { ascending: true, nullsFirst: false })

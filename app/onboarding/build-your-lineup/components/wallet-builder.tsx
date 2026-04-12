@@ -18,7 +18,6 @@ import { CardResult, CardResultsList } from "./card-results-list";
 type BaseCardInstance = {
   instanceId: string;
   cardId: string;
-  product_key: string | null;
   card_name: string;
   display_name: string | null;
   issuer: string;
@@ -29,7 +28,6 @@ export type SelectedCardInstance = BaseCardInstance;
 
 type WalletCard = {
   id: string;
-  product_key: string | null;
   card_name: string;
   display_name: string | null;
   issuer: string;
@@ -238,7 +236,7 @@ export function WalletBuilder() {
 
     const { data, error: walletError } = await supabase
       .from("user_cards")
-      .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
+      .select("card_id, cards!inner(id, card_name, display_name, issuer, network)")
       .eq("user_id", userId);
 
     if (walletError) {
@@ -254,7 +252,6 @@ export function WalletBuilder() {
     const persistedCards: BaseCardInstance[] = walletCards.map((card) => ({
       instanceId: `persisted-${card.id}`,
       cardId: card.id,
-      product_key: card.product_key,
       card_name: card.card_name,
       display_name: card.display_name,
       issuer: card.issuer,
@@ -359,34 +356,6 @@ export function WalletBuilder() {
     }, 2400);
   }, []);
 
-  const resolveCanonicalCard = useCallback(
-    async (selected: BaseCardInstance): Promise<{ id: string; product_key: string | null } | null> => {
-      if (selected.product_key) {
-        const { data, error } = await supabase
-          .from("cards")
-          .select("id, product_key")
-          .eq("product_key", selected.product_key)
-          .order("id", { ascending: true })
-          .limit(1);
-
-        if (error) {
-          console.error("Failed to resolve card by product_key", error);
-          return { id: selected.cardId, product_key: selected.product_key };
-        }
-
-        const canonicalCard = data?.[0];
-        if (canonicalCard?.id) {
-          return { id: canonicalCard.id, product_key: canonicalCard.product_key };
-        }
-
-        return { id: selected.cardId, product_key: selected.product_key };
-      }
-
-      return { id: selected.cardId, product_key: selected.product_key };
-    },
-    [supabase],
-  );
-
   const addCardToWallet = useCallback(
     async (userId: string, cardId: string) =>
       supabase.from("user_cards").upsert(
@@ -413,7 +382,6 @@ export function WalletBuilder() {
           {
             instanceId: optimisticInstanceId,
             cardId: card.id,
-            product_key: card.product_key,
             card_name: card.card_name,
             display_name: card.display_name,
             issuer: card.issuer,
@@ -437,23 +405,7 @@ export function WalletBuilder() {
         return;
       }
 
-      const resolved = await resolveCanonicalCard({
-        instanceId: optimisticInstanceId,
-        cardId: card.id,
-        product_key: card.product_key,
-        card_name: card.card_name,
-        display_name: card.display_name,
-        issuer: card.issuer,
-        network: card.network,
-      });
-
-      if (!resolved?.id) {
-        setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
-        return;
-      }
-
-      const canonicalCardId = resolved.id;
-      const { error: insertError } = await addCardToWallet(userId, canonicalCardId);
+      const { error: insertError } = await addCardToWallet(userId, card.id);
       if (insertError) {
         console.error("Failed to add card from search", insertError);
         setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
@@ -462,11 +414,11 @@ export function WalletBuilder() {
 
       const { error: bootstrapError } = await supabase.rpc("bootstrap_user_benefits_for_card", {
         p_user_id: userId,
-        p_card_id: canonicalCardId,
+        p_card_id: card.id,
       });
 
       if (bootstrapError) {
-        console.error(`Failed to bootstrap benefits for card ${canonicalCardId}`, bootstrapError);
+        console.error(`Failed to bootstrap benefits for card ${card.id}`, bootstrapError);
       }
 
       await loadExistingWalletCards();
@@ -474,7 +426,6 @@ export function WalletBuilder() {
     [
       addCardToWallet,
       loadExistingWalletCards,
-      resolveCanonicalCard,
       resetSearchUI,
       showAddedConfirmation,
       markCardForFadeIn,
