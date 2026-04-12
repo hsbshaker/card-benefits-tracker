@@ -16,7 +16,7 @@ type Tab = {
 
 const tabs: Tab[] = [
   { id: "home", label: "Home", href: "/home", comingSoon: false },
-  { id: "wallet", label: "Wallet Builder", href: "/onboarding/build-your-lineup", comingSoon: false },
+  { id: "wallet", label: "Wallet", href: "/wallet", comingSoon: false },
   { id: "reminders", label: "Personalize Reminders", href: "/onboarding/benefits", comingSoon: false },
 ];
 
@@ -30,13 +30,13 @@ export function AppHeader() {
 
   const activeTab = useMemo<TabId | null>(() => {
     if (pathname.startsWith("/home")) return "home";
-    if (pathname.startsWith("/onboarding/build-your-lineup") || pathname.startsWith("/wallet")) return "wallet";
+    if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/onboarding/benefits") || pathname.startsWith("/benefits")) return "reminders";
     return null;
   }, [pathname]);
 
   const mobilePageTitle = useMemo(() => {
-    if (activeTab === "wallet") return "Wallet Builder";
+    if (activeTab === "wallet") return "Wallet";
     if (activeTab === "reminders") return "Personalize Reminders";
     if (activeTab === "home") return "Home";
     return "Memento";
