@@ -1,5 +1,6 @@
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { getCleanCardName, getIssuerShortLabel } from "@/lib/format-card";
 
 export type CardResult = {
   id: string;
@@ -7,7 +8,7 @@ export type CardResult = {
   card_name: string;
   display_name: string | null;
   network: string | null;
-  product_key: string | null;
+  card_status: "active" | "no_trackable_benefits";
 };
 
 type CardResultsListProps = {
@@ -23,21 +24,13 @@ type CardResultsListProps = {
 };
 
 const rowTransition = "transition motion-safe:duration-200 ease-out";
-function getCleanCardName(card: CardResult) {
-  let name = card.display_name ?? card.card_name;
-  if (name.startsWith("American Express ")) {
-    name = name.slice("American Express ".length);
-  }
-  if (name.endsWith(" Card")) {
-    name = name.slice(0, -" Card".length);
-  }
-  return name;
-}
 
-function getIssuerDisplayName(issuer: string) {
-  const normalizedIssuer = issuer.trim().toLowerCase();
-  if (normalizedIssuer === "american express" || normalizedIssuer === "amex") return "AMEX";
-  return issuer;
+function getCardStatusCopy(card: CardResult) {
+  if (card.card_status === "no_trackable_benefits") {
+    return "No trackable benefits yet";
+  }
+
+  return getIssuerShortLabel(card.issuer);
 }
 
 export function CardResultsList({
@@ -69,11 +62,13 @@ export function CardResultsList({
             {cards.map((card, index) => {
               const highlighted = highlightedIndex === index;
               const isSaved = savedCardIds.has(card.id);
-              const label = getCleanCardName(card);
-              const issuerLabel = getIssuerDisplayName(card.issuer);
+              const isTrackable = card.card_status === "active";
+              const isDisabled = isSaved || !isTrackable;
+              const label = getCleanCardName(card.display_name, card.card_name);
+              const issuerLabel = getCardStatusCopy(card);
 
               const handleRowClick = () => {
-                if (isSaved) return;
+                if (isDisabled) return;
                 onAdd(card);
               };
 
@@ -81,11 +76,11 @@ export function CardResultsList({
                 <li key={`${card.id}-${index}`}>
                   <button
                     type="button"
-                    disabled={isSaved}
+                    disabled={isDisabled}
                     onClick={handleRowClick}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-sm transition-all duration-150",
-                      isSaved
+                      isDisabled
                         ? "cursor-not-allowed opacity-60"
                         : cn(
                             rowTransition,
@@ -101,6 +96,9 @@ export function CardResultsList({
                       <p className="mt-0.5 text-xs text-white/55">{issuerLabel}</p>
                     </div>
                     {isSaved ? <span className="shrink-0 text-xs text-white/55">Saved</span> : null}
+                    {!isSaved && !isTrackable ? (
+                      <span className="shrink-0 text-xs text-[#F7C948]">Not trackable</span>
+                    ) : null}
                   </button>
                 </li>
               );

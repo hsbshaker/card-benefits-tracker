@@ -29,9 +29,11 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("cards")
-    .select("id, issuer, card_name, display_name, network, product_key, created_at, updated_at")
-    .order("product_key", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .select("id, issuer, card_name, display_name, network, card_status")
+    .in("card_status", ["active", "no_trackable_benefits"])
+    .order("card_status", { ascending: true })
+    .order("display_name", { ascending: true, nullsFirst: false })
+    .order("card_name", { ascending: true });
 
   if (issuer.length > 0) {
     query = query.eq("issuer", issuer);

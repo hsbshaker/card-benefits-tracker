@@ -11,13 +11,13 @@ import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Surface } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { getCleanCardName, getIssuerShortLabel } from "@/lib/format-card";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CardResult, CardResultsList } from "./card-results-list";
 
 type BaseCardInstance = {
   instanceId: string;
   cardId: string;
-  product_key: string | null;
   card_name: string;
   display_name: string | null;
   issuer: string;
@@ -28,11 +28,11 @@ export type SelectedCardInstance = BaseCardInstance;
 
 type WalletCard = {
   id: string;
-  product_key: string | null;
   card_name: string;
   display_name: string | null;
   issuer: string;
   network: string | null;
+  card_status?: "active" | "no_trackable_benefits" | null;
 };
 
 type WalletCardRow = {
@@ -56,29 +56,6 @@ const ISSUER_FILTER_OPTIONS: IssuerFilterOption[] = [
   { id: "Citi", label: "Citi", searchTokens: ["citi"] },
 ];
 
-function getCleanCardName(displayName: string | null, cardName: string) {
-  let name = displayName ?? cardName;
-  if (name.startsWith("American Express ")) {
-    name = name.slice("American Express ".length);
-  }
-  if (name.endsWith(" Card")) {
-    name = name.slice(0, -" Card".length);
-  }
-  return name;
-}
-
-function getCanonicalIssuerLabel(issuer: string) {
-  const normalizedIssuer = normalizeValue(issuer);
-  if (normalizedIssuer === "american express" || normalizedIssuer === "amex") return "AMEX";
-  if (normalizedIssuer === "capital one" || normalizedIssuer === "capitalone") return "Capital One";
-  if (normalizedIssuer === "chase") return "Chase";
-  if (normalizedIssuer === "citi") return "Citi";
-  return issuer.trim();
-}
-
-function getIssuerDisplayName(issuer: string) {
-  return getCanonicalIssuerLabel(issuer);
-}
 
 function getCardSortName(displayName: string | null, cardName: string) {
   return getCleanCardName(displayName, cardName).toLowerCase().trim();
@@ -89,7 +66,7 @@ function normalizeValue(value: string | null | undefined) {
 }
 
 function getIssuerSearchTokens(issuer: string) {
-  const canonicalIssuer = getCanonicalIssuerLabel(issuer);
+  const canonicalIssuer = getIssuerShortLabel(issuer);
   const knownOption = ISSUER_FILTER_OPTIONS.find((option) => option.id === canonicalIssuer);
   if (knownOption) return knownOption.searchTokens;
   const normalizedIssuer = normalizeValue(issuer);
@@ -111,7 +88,7 @@ function filterAndRankCards(cards: CardResult[], query: string, selectedIssuers:
 
   return cards
     .filter((card) => {
-      if (hasIssuerFilter && !selectedIssuerSet.has(getCanonicalIssuerLabel(card.issuer))) return false;
+      if (hasIssuerFilter && !selectedIssuerSet.has(getIssuerShortLabel(card.issuer))) return false;
       return true;
     })
     .map((card) => {
@@ -193,7 +170,7 @@ export function WalletBuilder() {
   const hasActiveFilters = selectedIssuerFilters.length > 0;
   const shouldShowResults = !isFilterPopoverOpen && isResultsOpen && normalizedQuery.length >= 1;
   const availableIssuerSet = useMemo(
-    () => new Set(cardsIndex.map((card) => getCanonicalIssuerLabel(card.issuer))),
+    () => new Set(cardsIndex.map((card) => getIssuerShortLabel(card.issuer))),
     [cardsIndex],
   );
   const issuerFilterOptions = useMemo(
@@ -259,7 +236,7 @@ export function WalletBuilder() {
 
     const { data, error: walletError } = await supabase
       .from("user_cards")
-      .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
+      .select("card_id, cards!inner(id, card_name, display_name, issuer, network)")
       .eq("user_id", userId);
 
     if (walletError) {
@@ -275,7 +252,6 @@ export function WalletBuilder() {
     const persistedCards: BaseCardInstance[] = walletCards.map((card) => ({
       instanceId: `persisted-${card.id}`,
       cardId: card.id,
-      product_key: card.product_key,
       card_name: card.card_name,
       display_name: card.display_name,
       issuer: card.issuer,
@@ -380,34 +356,6 @@ export function WalletBuilder() {
     }, 2400);
   }, []);
 
-  const resolveCanonicalCard = useCallback(
-    async (selected: BaseCardInstance): Promise<{ id: string; product_key: string | null } | null> => {
-      if (selected.product_key) {
-        const { data, error } = await supabase
-          .from("cards")
-          .select("id, product_key")
-          .eq("product_key", selected.product_key)
-          .order("id", { ascending: true })
-          .limit(1);
-
-        if (error) {
-          console.error("Failed to resolve card by product_key", error);
-          return { id: selected.cardId, product_key: selected.product_key };
-        }
-
-        const canonicalCard = data?.[0];
-        if (canonicalCard?.id) {
-          return { id: canonicalCard.id, product_key: canonicalCard.product_key };
-        }
-
-        return { id: selected.cardId, product_key: selected.product_key };
-      }
-
-      return { id: selected.cardId, product_key: selected.product_key };
-    },
-    [supabase],
-  );
-
   const addCardToWallet = useCallback(
     async (userId: string, cardId: string) =>
       supabase.from("user_cards").upsert(
@@ -422,6 +370,7 @@ export function WalletBuilder() {
 
   const addCardFromSearch = useCallback(
     async (card: CardResult) => {
+      if (card.card_status !== "active") return;
       if (walletCardIds.has(card.id)) return;
 
       const optimisticInstanceId = `optimistic-${card.id}-${Date.now()}`;
@@ -433,7 +382,6 @@ export function WalletBuilder() {
           {
             instanceId: optimisticInstanceId,
             cardId: card.id,
-            product_key: card.product_key,
             card_name: card.card_name,
             display_name: card.display_name,
             issuer: card.issuer,
@@ -457,23 +405,7 @@ export function WalletBuilder() {
         return;
       }
 
-      const resolved = await resolveCanonicalCard({
-        instanceId: optimisticInstanceId,
-        cardId: card.id,
-        product_key: card.product_key,
-        card_name: card.card_name,
-        display_name: card.display_name,
-        issuer: card.issuer,
-        network: card.network,
-      });
-
-      if (!resolved?.id) {
-        setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
-        return;
-      }
-
-      const canonicalCardId = resolved.id;
-      const { error: insertError } = await addCardToWallet(userId, canonicalCardId);
+      const { error: insertError } = await addCardToWallet(userId, card.id);
       if (insertError) {
         console.error("Failed to add card from search", insertError);
         setSelectedCards((prev) => prev.filter((selected) => selected.instanceId !== optimisticInstanceId));
@@ -482,11 +414,11 @@ export function WalletBuilder() {
 
       const { error: bootstrapError } = await supabase.rpc("bootstrap_user_benefits_for_card", {
         p_user_id: userId,
-        p_card_id: canonicalCardId,
+        p_card_id: card.id,
       });
 
       if (bootstrapError) {
-        console.error(`Failed to bootstrap benefits for card ${canonicalCardId}`, bootstrapError);
+        console.error(`Failed to bootstrap benefits for card ${card.id}`, bootstrapError);
       }
 
       await loadExistingWalletCards();
@@ -494,7 +426,6 @@ export function WalletBuilder() {
     [
       addCardToWallet,
       loadExistingWalletCards,
-      resolveCanonicalCard,
       resetSearchUI,
       showAddedConfirmation,
       markCardForFadeIn,
@@ -915,7 +846,7 @@ export function WalletBuilder() {
                           {getCleanCardName(card.display_name, card.card_name)}
                         </p>
                         <p className="mt-0.5 text-sm text-white/55">
-                          {getIssuerDisplayName(card.issuer)}
+                          {getIssuerShortLabel(card.issuer)}
                         </p>
                       </div>
                       <button

@@ -54,3 +54,4 @@ from public.user_cards
 group by user_id, card_id
 having count(*) > 1;
 ```
+

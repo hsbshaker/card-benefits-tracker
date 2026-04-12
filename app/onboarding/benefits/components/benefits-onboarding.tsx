@@ -16,75 +16,28 @@ import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { MobilePageContainer } from "@/components/ui/MobilePageContainer";
 import { Surface } from "@/components/ui/Surface";
+import { getBenefitPeriodUrgency, getCurrentBenefitPeriod } from "@/lib/benefit-periods";
 import { cn } from "@/lib/cn";
+import { getIssuerShortLabel } from "@/lib/format-card";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  getDefaultCadence,
+  loadBenefitsOnboardingData,
+  type BenefitRow,
+  type Cadence,
+  type CardGroup,
+} from "./benefits-onboarding-data";
+import {
+  describeSupabaseError,
+  persistBenefitPreferencesOnComplete,
+  persistCurrentPeriodUsedPreference,
+  persistRemindMePreference,
+  removeWalletCard,
+} from "./benefits-onboarding-persistence";
 
-type Cadence = "monthly" | "quarterly" | "semi_annual" | "annual" | "one_time";
-
-type BenefitRow = {
-  id: string;
-  display_name: string;
-  description: string | null;
-  cadence: Cadence;
-  cadence_detail: Record<string, unknown> | null;
-  value_cents: number | null;
-  notes: string | null;
-  user_benefit_id: string | null;
-  remind_me: boolean;
-  used: boolean;
-};
-
-type CardGroup = {
-  cardId: string;
-  cardName: string;
-  productKey: string | null;
-  issuer: string;
-  network: string | null;
-  benefits: BenefitRow[];
-};
-
-type UserBenefitRecord = {
-  id: string;
-  benefit_id: string;
-  remind_me?: boolean | null;
-  used?: boolean | null;
-  is_enabled?: boolean | null;
-};
-
-type SupabaseErrorLike = {
-  message?: string;
-  code?: string;
-  details?: string;
-  hint?: string;
-};
-
-const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semi_annual", "annual", "one_time"];
+const CADENCE_ORDER: Cadence[] = ["monthly", "quarterly", "semiannual", "annual", "multi_year", "one_time", "per_booking"];
 const BENEFIT_AMOUNT_ACCENT_CLASS = "text-[#F7C948]";
 const BELL_COLUMN_WIDTH_CLASS = "w-16";
-const ISSUER_DISPLAY_MAP: Record<string, string> = {
-  amex: "American Express",
-  "american express": "American Express",
-  chase: "Chase",
-  citi: "Citi",
-  "capital-one": "Capital One",
-  "capital one": "Capital One",
-  discover: "Discover",
-  wellsfargo: "Wells Fargo",
-  "wells fargo": "Wells Fargo",
-  usbank: "US Bank",
-  "us bank": "US Bank",
-  bankofamerica: "Bank of America",
-  "bank of america": "Bank of America",
-};
-const NETWORK_DISPLAY_MAP: Record<string, string> = {
-  amex: "Amex",
-  "american express": "Amex",
-  visa: "Visa",
-  mastercard: "Mastercard",
-  "master card": "Mastercard",
-  mc: "Mastercard",
-  discover: "Discover",
-};
 const ENROLLMENT_URL_BY_BENEFIT_NAME: Record<string, string> = {
   "hilton honors gold status": "https://www.americanexpress.com/icc/cards/benefits/travel/hilton-honors-elite-gold-status.html",
   "marriott bonvoy gold elite status": "https://global.americanexpress.com/card-benefits/detail/marriott-bonvoy-gold-elite/platinum",
@@ -103,7 +56,9 @@ const CURRENCY_NO_CENTS_FORMATTER = new Intl.NumberFormat("en-US", {
 });
 
 function formatCadenceLabel(cadence: Cadence) {
-  if (cadence === "semi_annual") return "Semi-Annually";
+  if (cadence === "semiannual") return "Semi-Annual";
+  if (cadence === "multi_year") return "Multi-Year";
+  if (cadence === "per_booking") return "Per Booking";
   if (cadence === "one_time") return "One-Time Activation";
   return cadence.charAt(0).toUpperCase() + cadence.slice(1);
 }
@@ -121,35 +76,10 @@ function formatBenefitAmount(value_cents: number | null, cadence: Cadence) {
   if (cadence === "one_time") return `${amount} one-time`;
   if (cadence === "monthly") return `${amount}/month`;
   if (cadence === "quarterly") return `${amount}/quarter`;
-  if (cadence === "semi_annual") return `${amount}/semi-annual`;
+  if (cadence === "semiannual") return `${amount}/semi-annual`;
+  if (cadence === "multi_year") return `${amount}/multi-year`;
+  if (cadence === "per_booking") return `${amount}/booking`;
   return `${amount}/year`;
-}
-
-function normalizeCadence(cadence: string | null | undefined): Cadence {
-  if (cadence === "monthly" || cadence === "quarterly" || cadence === "semi_annual" || cadence === "annual" || cadence === "one_time") {
-    return cadence;
-  }
-
-  return "annual";
-}
-
-function toTitleCase(raw: string) {
-  return raw
-    .replace(/[_-]+/g, " ")
-    .trim()
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function normalizeIssuerDisplayName(rawIssuer: string) {
-  const normalizedKey = rawIssuer.trim().toLowerCase();
-  return ISSUER_DISPLAY_MAP[normalizedKey] ?? toTitleCase(rawIssuer);
-}
-
-function normalizeNetworkDisplayName(rawNetwork: string | null) {
-  if (!rawNetwork) return null;
-  const normalizedKey = rawNetwork.trim().toLowerCase();
-  return NETWORK_DISPLAY_MAP[normalizedKey] ?? toTitleCase(rawNetwork);
 }
 
 function getEnrollmentUrl(benefitDisplayName: string) {
@@ -162,33 +92,6 @@ function getShortCardName(displayName: string, issuer: string) {
     return displayName.replace(issuer, "").trim();
   }
   return displayName;
-}
-
-function getIssuerShortLabel(issuer: string) {
-  const value = (issuer || "").toLowerCase();
-  if (value.includes("american express")) return "AMEX";
-  return issuer;
-}
-
-function describeSupabaseError(error: unknown) {
-  const err = (error ?? {}) as SupabaseErrorLike;
-  return {
-    message: err.message,
-    code: err.code,
-    details: err.details,
-    hint: err.hint,
-    raw: error,
-    stringified:
-      typeof error === "string"
-        ? error
-        : (() => {
-            try {
-              return JSON.stringify(error);
-            } catch {
-              return String(error);
-            }
-          })(),
-  };
 }
 
 function CheckmarkIcon({ className }: { className?: string }) {
@@ -247,16 +150,25 @@ function ExternalLinkIcon({ className }: { className?: string }) {
 type BenefitItemProps = {
   benefit: BenefitRow;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
-  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
+  onToggleCurrentPeriodUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
 };
 
-const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onToggleUsed }: BenefitItemProps) {
+const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onToggleCurrentPeriodUsed }: BenefitItemProps) {
   const formattedAmount = useMemo(() => formatBenefitAmount(benefit.value_cents, benefit.cadence), [benefit.value_cents, benefit.cadence]);
   const descriptionText = benefit.description?.trim();
   const enrollmentUrl = useMemo(() => getEnrollmentUrl(benefit.display_name), [benefit.display_name]);
+  const currentPeriod = useMemo(
+    () => getCurrentBenefitPeriod(benefit.cadence, benefit.reset_timing),
+    [benefit.cadence, benefit.reset_timing],
+  );
+  const currentPeriodLabel = currentPeriod?.label ?? null;
+  const urgency = useMemo(
+    () => getBenefitPeriodUrgency(benefit.cadence, benefit.reset_timing),
+    [benefit.cadence, benefit.reset_timing],
+  );
   const isEnrollmentBenefit = Boolean(enrollmentUrl);
-  const remindMeDisabled = benefit.used;
-  const isRowDimmed = isEnrollmentBenefit ? benefit.used : !benefit.remind_me;
+  const remindMeDisabled = benefit.current_period_used;
+  const isRowDimmed = isEnrollmentBenefit ? benefit.current_period_used : !benefit.remind_me;
   const [isExpanded, setIsExpanded] = useState(false);
   const canExpand = Boolean(descriptionText);
   const detailsRegionId = `benefit-details-${benefit.id}`;
@@ -297,7 +209,13 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
       >
         {isEnrollmentBenefit ? (
           <div className="min-w-0 flex flex-col gap-3">
-            <p className="min-w-0 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
+            <div className="min-w-0">
+              <p className="min-w-0 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
+              {currentPeriodLabel ? (
+                <p className="mt-1 text-xs text-white/55">Current period: {currentPeriodLabel}</p>
+              ) : null}
+              {urgency ? <p className="mt-1 text-xs text-[#F7C948]">{urgency.urgency_label}</p> : null}
+            </div>
             {formattedAmount ? (
               <span
                 className={cn(
@@ -313,20 +231,20 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
                 type="button"
                 className={cn(
                   "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-sm font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1020]",
-                  benefit.used
+                  benefit.current_period_used
                     ? "border-[#86EFAC]/35 bg-[#86EFAC]/10 text-[#BBF7D0]"
                     : "border-white/12 bg-white/[0.03] text-white/70 hover:bg-white/[0.08] hover:text-white",
                 )}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onToggleUsed(benefit, !benefit.used);
+                  onToggleCurrentPeriodUsed(benefit, !benefit.current_period_used);
                 }}
               >
                 Already Enrolled
-                {benefit.used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
+                {benefit.current_period_used ? <CheckmarkIcon className="h-3.5 w-3.5 shrink-0" /> : null}
               </button>
 
-              {!benefit.used ? (
+              {!benefit.current_period_used ? (
                 <a
                   href={enrollmentUrl ?? "#"}
                   target="_blank"
@@ -349,6 +267,10 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
               <div className="flex min-w-0 items-center gap-1">
                 <p className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-white/95">{benefit.display_name}</p>
               </div>
+              {currentPeriodLabel ? (
+                <p className="text-xs text-white/55">Current period: {currentPeriodLabel}</p>
+              ) : null}
+              {urgency ? <p className="text-xs text-[#F7C948]">{urgency.urgency_label}</p> : null}
 
               {formattedAmount || canExpand ? (
                 <div className="flex items-center gap-2">
@@ -428,28 +350,24 @@ const BenefitItem = memo(function BenefitItem({ benefit, onToggleRemindMe, onTog
 type CardPanelProps = {
   card: CardGroup;
   isExpanded: boolean;
-  isRemoved: boolean;
-  removedCardName: string | null;
   activeCadence: Cadence;
   onToggleExpand: (cardId: string) => void;
   onCadenceChange: (cardId: string, cadence: Cadence) => void;
   onTabKeyDown: (event: KeyboardEvent<HTMLButtonElement>, cardId: string, cadence: Cadence) => void;
   onToggleRemindMe: (benefit: BenefitRow, nextValue: boolean) => void;
-  onToggleUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
+  onToggleCurrentPeriodUsed: (benefit: BenefitRow, nextUsed: boolean) => void;
   onRequestRemove: (card: CardGroup) => void;
 };
 
 const CardPanel = memo(function CardPanel({
   card,
   isExpanded,
-  isRemoved,
-  removedCardName,
   activeCadence,
   onToggleExpand,
   onCadenceChange,
   onTabKeyDown,
   onToggleRemindMe,
-  onToggleUsed,
+  onToggleCurrentPeriodUsed,
   onRequestRemove,
 }: CardPanelProps) {
   const shortCardName = useMemo(() => getShortCardName(card.cardName, card.issuer), [card.cardName, card.issuer]);
@@ -459,9 +377,11 @@ const CardPanel = memo(function CardPanel({
     const counts: Record<Cadence, number> = {
       monthly: 0,
       quarterly: 0,
-      semi_annual: 0,
+      semiannual: 0,
       annual: 0,
+      multi_year: 0,
       one_time: 0,
+      per_booking: 0,
     };
 
     for (const benefit of card.benefits) {
@@ -475,14 +395,6 @@ const CardPanel = memo(function CardPanel({
     () => card.benefits.filter((benefit) => benefit.cadence === activeCadence),
     [card.benefits, activeCadence],
   );
-
-  if (isRemoved) {
-    return (
-      <Surface className="p-4">
-        <p className="text-sm text-white/60">{`${removedCardName ?? card.cardName} Removed From Wallet`}</p>
-      </Surface>
-    );
-  }
 
   return (
     <Surface key={card.cardId} className="p-0 backdrop-blur-0 [content-visibility:auto] [contain-intrinsic-size:80px]">
@@ -501,7 +413,13 @@ const CardPanel = memo(function CardPanel({
         >
           <div className="min-w-0 flex flex-col gap-1">
             <p className="min-w-0 line-clamp-2 text-xl font-semibold leading-tight text-white">{headerDisplayName}</p>
-            <p className="min-w-0 truncate text-sm leading-snug text-white/55">{`${issuerShortLabel} • ${card.benefits.length} benefits`}</p>
+            <p className="min-w-0 truncate text-sm leading-snug text-white/55">
+              {card.benefits.length > 0
+                ? `${issuerShortLabel} • ${card.benefits.length} benefits`
+                : card.cardStatus === "no_trackable_benefits"
+                  ? `${issuerShortLabel} • No trackable benefits yet`
+                  : `${issuerShortLabel} • No Memento-trackable benefits yet`}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -533,75 +451,87 @@ const CardPanel = memo(function CardPanel({
 
       {isExpanded ? (
         <div className="space-y-2 border-t border-white/10 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
-                {CADENCE_ORDER.map((cadence) => {
-                  const count = cadenceCountByType[cadence];
-                  const isActive = cadence === activeCadence;
-                  return (
-                    <button
-                      key={cadence}
-                      id={`tab-${card.cardId}-${cadence}`}
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      aria-controls={`panel-${card.cardId}-${cadence}`}
-                      tabIndex={isActive ? 0 : -1}
-                      className={cn(
-                        "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                        isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
-                      )}
-                      onClick={() => onCadenceChange(card.cardId, cadence)}
-                      onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
-                    >
-                      {formatCadenceLabel(cadence)} ({count})
-                    </button>
-                  );
-                })}
+          {card.benefits.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">
+              {card.cardStatus === "no_trackable_benefits"
+                ? "This card is in our catalog, but it doesn’t have any benefits we track in Memento yet."
+                : "This card doesn’t have any benefits with tracking enabled in Memento yet."}
+            </p>
+          ) : (
+            <>
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  <div role="tablist" aria-label={`${card.cardName} benefit cadence`} className="inline-flex min-w-max gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                    {CADENCE_ORDER.map((cadence) => {
+                      const count = cadenceCountByType[cadence];
+                      const isActive = cadence === activeCadence;
+                      return (
+                        <button
+                          key={cadence}
+                          id={`tab-${card.cardId}-${cadence}`}
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          aria-controls={`panel-${card.cardId}-${cadence}`}
+                          tabIndex={isActive ? 0 : -1}
+                          className={cn(
+                            "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                            isActive ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white/90",
+                          )}
+                          onClick={() => onCadenceChange(card.cardId, cadence)}
+                          onKeyDown={(event) => onTabKeyDown(event, card.cardId, cadence)}
+                        >
+                          {formatCadenceLabel(cadence)} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div id={`panel-${card.cardId}-${activeCadence}`} role="tabpanel" aria-labelledby={`tab-${card.cardId}-${activeCadence}`} className="space-y-1.5">
-            {/* Render both labels in one row so cadence + reminder headers share identical style and baseline alignment. */}
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{formatCadenceLabel(activeCadence)}</p>
-              <div className={cn("flex shrink-0 justify-end", BELL_COLUMN_WIDTH_CLASS)}>
-                <p className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide leading-none text-white/50">Remind Me</p>
+              <div id={`panel-${card.cardId}-${activeCadence}`} role="tabpanel" aria-labelledby={`tab-${card.cardId}-${activeCadence}`} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{formatCadenceLabel(activeCadence)}</p>
+                  <div className={cn("flex shrink-0 justify-end", BELL_COLUMN_WIDTH_CLASS)}>
+                    <p className="whitespace-nowrap text-right text-xs font-semibold uppercase tracking-wide leading-none text-white/50">Remind Me</p>
+                  </div>
+                </div>
+
+                {activeCadenceBenefits.length === 0 ? (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">No benefits in this cadence.</p>
+                ) : (
+                  <ul className="divide-y divide-white/10">
+                    {activeCadenceBenefits.map((benefit) => (
+                      <BenefitItem
+                        key={benefit.id}
+                        benefit={benefit}
+                        onToggleRemindMe={onToggleRemindMe}
+                        onToggleCurrentPeriodUsed={onToggleCurrentPeriodUsed}
+                      />
+                    ))}
+                  </ul>
+                )}
               </div>
-            </div>
-
-            {activeCadenceBenefits.length === 0 ? (
-              <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/65">No benefits in this cadence.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {activeCadenceBenefits.map((benefit) => (
-                  <BenefitItem key={benefit.id} benefit={benefit} onToggleRemindMe={onToggleRemindMe} onToggleUsed={onToggleUsed} />
-                ))}
-              </ul>
-            )}
-          </div>
+            </>
+          )}
         </div>
       ) : null}
     </Surface>
   );
 });
 
-function getDefaultCadence(benefits: BenefitRow[]) {
-  if (benefits.some((benefit) => benefit.cadence === "monthly")) return "monthly";
-  return CADENCE_ORDER.find((cadence) => benefits.some((benefit) => benefit.cadence === cadence)) ?? "monthly";
-}
+type BenefitsOnboardingProps = {
+  variant?: "onboarding" | "dashboard";
+};
 
-export function BenefitsOnboarding() {
+export function BenefitsOnboarding({ variant = "onboarding" }: BenefitsOnboardingProps) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const router = useRouter();
+  const isDashboardVariant = variant === "dashboard";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cards, setCards] = useState<CardGroup[]>([]);
-  const [removedCardIds, setRemovedCardIds] = useState<string[]>([]);
-  const [removedCardNamesById, setRemovedCardNamesById] = useState<Record<string, string>>({});
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [activeCadenceByCardId, setActiveCadenceByCardId] = useState<Record<string, Cadence>>({});
   const [userId, setUserId] = useState<string | null>(null);
@@ -613,6 +543,8 @@ export function BenefitsOnboarding() {
   const [isCompleting, setIsCompleting] = useState(false);
   const removeToastTimerRef = useRef<number | null>(null);
   const removeModalRef = useRef<HTMLDivElement | null>(null);
+  const expandedCardIdRef = useRef<string | null>(null);
+  const activeCadenceByCardIdRef = useRef<Record<string, Cadence>>({});
 
   const profileOnRender = useCallback<ProfilerOnRenderCallback>((id, phase, actualDuration) => {
     if (process.env.NODE_ENV === "production") return;
@@ -630,228 +562,33 @@ export function BenefitsOnboarding() {
     };
   }, []);
 
+  useEffect(() => {
+    expandedCardIdRef.current = expandedCardId;
+  }, [expandedCardId]);
+
+  useEffect(() => {
+    activeCadenceByCardIdRef.current = activeCadenceByCardId;
+  }, [activeCadenceByCardId]);
+
   const loadWalletBenefits = useCallback(async () => {
     setLoading(true);
     setError(null);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("Could not verify your account. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
-    setUserId(user.id);
-
-    // Invariant: user_cards is unique per (user_id, card_id), enforced by DB unique index and idempotent upserts.
-    const { data: walletRows, error: walletError } = await supabase
-      .from("user_cards")
-      .select("card_id, cards!inner(id, card_name, display_name, product_key, issuer, network)")
-      .eq("user_id", user.id);
-
-    if (walletError) {
-      console.error("Failed to load wallet cards", walletError);
-      setError("Could not load your cards right now.");
-      setLoading(false);
-      return;
-    }
-
-    type WalletRow = {
-      card_id: string;
-      cards: { id: string; card_name: string; display_name: string | null; product_key: string | null; issuer: string; network: string | null };
-    };
-
-    const wallet = (walletRows ?? []) as unknown as WalletRow[];
-    if (process.env.NODE_ENV !== "production") {
-      const seenCardIds = new Set<string>();
-      const duplicateCardIds = new Set<string>();
-      for (const row of wallet) {
-        if (seenCardIds.has(row.card_id)) duplicateCardIds.add(row.card_id);
-        seenCardIds.add(row.card_id);
-      }
-      if (duplicateCardIds.size > 0) {
-        console.warn("[benefits-onboarding] duplicate wallet card_ids detected after load", {
-          user_id: user.id,
-          card_ids: Array.from(duplicateCardIds),
-        });
-      }
-    }
-
-    if (wallet.length === 0) {
-      setCards([]);
-      setRemovedCardIds([]);
-      setRemovedCardNamesById({});
-      setExpandedCardId(null);
-      setLoading(false);
-      return;
-    }
-
-    const cardIds = wallet.map((row) => row.cards.id);
-    const { data: benefitRows, error: benefitsError } = await supabase
-      .from("benefits")
-      .select("id, card_id, display_name, description, cadence, cadence_detail, value_cents, requires_enrollment, requires_selection, notes")
-      .in("card_id", cardIds);
-
-    if (benefitsError) {
-      console.error("Failed to load card benefits", benefitsError);
-      setError("Could not load card benefits right now.");
-      setLoading(false);
-      return;
-    }
-
-    const benefits = (benefitRows ?? []) as unknown as Array<{
-      card_id: string;
-      id: string;
-      display_name: string;
-      description: string | null;
-      cadence: string | null;
-      cadence_detail: Record<string, unknown> | null;
-      value_cents: number | null;
-      notes: string | null;
-    }>;
-
-    if (process.env.NODE_ENV !== "production") {
-      const benefitCountByCard = new Map<string, number>();
-      for (const row of benefits) {
-        benefitCountByCard.set(row.card_id, (benefitCountByCard.get(row.card_id) ?? 0) + 1);
-      }
-
-      for (const walletCard of wallet) {
-        console.debug("[benefits-onboarding] card benefit match", {
-          card_id: walletCard.cards.id,
-          product_key: walletCard.cards.product_key,
-          matched_benefits: benefitCountByCard.get(walletCard.cards.id) ?? 0,
-        });
-      }
-    }
-
-    const benefitIds = Array.from(new Set(benefits.map((row) => row.id)));
-
-    let { data: userBenefitRows, error: userBenefitsError } = await supabase
-      .from("user_benefits")
-      .select("*")
-      .eq("user_id", user.id)
-      .in("benefit_id", benefitIds);
-
-    if (userBenefitsError) {
-      console.error("Failed to load user benefits", userBenefitsError);
-      setError("Could not load your benefit settings right now.");
-      setLoading(false);
-      return;
-    }
-
-    const userBenefitMap = new Map(((userBenefitRows ?? []) as UserBenefitRecord[]).map((row) => [row.benefit_id, row]));
-
-    const cardsMissingUserBenefits = new Set<string>();
-    for (const card of wallet) {
-      const cardBenefitIds = benefits.filter((row) => row.card_id === card.cards.id).map((row) => row.id);
-      if (cardBenefitIds.some((benefitId) => !userBenefitMap.has(benefitId))) {
-        cardsMissingUserBenefits.add(card.cards.id);
-      }
-    }
-
-    if (cardsMissingUserBenefits.size > 0) {
-      for (const cardId of cardsMissingUserBenefits) {
-        const { error: bootstrapError } = await supabase.rpc("bootstrap_user_benefits_for_card", {
-          p_user_id: user.id,
-          p_card_id: cardId,
-        });
-        if (bootstrapError) {
-          console.error(`Failed to bootstrap missing user benefits for card ${cardId}`, bootstrapError);
-        }
-      }
-
-      const refetch = await supabase
-        .from("user_benefits")
-        .select("*")
-        .eq("user_id", user.id)
-        .in("benefit_id", benefitIds);
-
-      userBenefitRows = refetch.data ?? userBenefitRows;
-      userBenefitsError = refetch.error;
-
-      if (userBenefitsError) {
-        console.error("Failed to reload user benefits", userBenefitsError);
-        setError("Could not load your benefit settings right now.");
-        setLoading(false);
-        return;
-      }
-    }
-
-    const refreshedUserBenefitMap = new Map(((userBenefitRows ?? []) as UserBenefitRecord[]).map((row) => [row.benefit_id, row]));
-
-    const nextCards: CardGroup[] = wallet
-      .map((walletCard) => {
-        const benefitsForCard = benefits
-          .filter((benefit) => benefit.card_id === walletCard.cards.id)
-          .sort(
-            (a, b) =>
-              CADENCE_ORDER.indexOf(normalizeCadence(a.cadence)) -
-                CADENCE_ORDER.indexOf(normalizeCadence(b.cadence)) ||
-              a.display_name.localeCompare(b.display_name),
-          )
-          .map((benefit) => {
-            const userBenefit = refreshedUserBenefitMap.get(benefit.id);
-
-            return {
-              id: benefit.id,
-              display_name: benefit.display_name,
-              description: benefit.description,
-              cadence: normalizeCadence(benefit.cadence),
-              cadence_detail: benefit.cadence_detail,
-              value_cents: benefit.value_cents,
-              notes: benefit.notes,
-              user_benefit_id: userBenefit?.id ?? null,
-              remind_me:
-                typeof userBenefit?.remind_me === "boolean"
-                  ? userBenefit.remind_me
-                  : typeof userBenefit?.is_enabled === "boolean"
-                    ? userBenefit.is_enabled
-                    : true,
-              used: typeof userBenefit?.used === "boolean" ? userBenefit.used : false,
-            };
-          });
-
-        return {
-          cardId: walletCard.cards.id,
-          cardName: walletCard.cards.display_name ?? walletCard.cards.card_name,
-          productKey: walletCard.cards.product_key,
-          issuer: normalizeIssuerDisplayName(walletCard.cards.issuer),
-          network: normalizeNetworkDisplayName(walletCard.cards.network),
-          benefits: benefitsForCard,
-        };
-      })
-      .sort((a, b) => a.cardName.localeCompare(b.cardName));
-
-    setCards(nextCards);
-    setRemovedCardIds((prev) => prev.filter((cardId) => nextCards.some((card) => card.cardId === cardId)));
-    setRemovedCardNamesById((prev) => {
-      const next: Record<string, string> = {};
-      for (const cardId of Object.keys(prev)) {
-        if (nextCards.some((card) => card.cardId === cardId)) {
-          next[cardId] = prev[cardId];
-        }
-      }
-      return next;
+    const result = await loadBenefitsOnboardingData({
+      supabase,
+      previousExpandedCardId: expandedCardIdRef.current,
+      previousActiveCadenceByCardId: activeCadenceByCardIdRef.current,
     });
-    setExpandedCardId((prev) => (prev && nextCards.some((card) => card.cardId === prev) ? prev : null));
-    setActiveCadenceByCardId((prev) => {
-      const next: Record<string, Cadence> = {};
-      for (const card of nextCards) {
-        const existing = prev[card.cardId];
-        if (existing && card.benefits.some((benefit) => benefit.cadence === existing)) {
-          next[card.cardId] = existing;
-          continue;
-        }
 
-        next[card.cardId] = getDefaultCadence(card.benefits);
-      }
-      return next;
-    });
+    if ("errorMessage" in result) {
+      setError(result.errorMessage);
+      setLoading(false);
+      return;
+    }
+
+    setUserId(result.userId);
+    setCards(result.cards);
+    setExpandedCardId(result.expandedCardId);
+    setActiveCadenceByCardId(result.activeCadenceByCardId);
     setLoading(false);
   }, [supabase]);
 
@@ -889,23 +626,16 @@ export function BenefitsOnboarding() {
   const updateRemindMe = useCallback(
     async (benefit: BenefitRow, nextValue: boolean) => {
       if (!userId) return;
-      if (benefit.used && nextValue) return;
+      if (benefit.current_period_used && nextValue) return;
 
       updateBenefitLocal(benefit.id, (prev) => ({ ...prev, remind_me: nextValue }));
 
-      const { data: savedRow, error: updateError } = await supabase
-        .from("user_benefits")
-        .upsert(
-          {
-            user_id: userId,
-            benefit_id: benefit.id,
-            remind_me: nextValue,
-            used: benefit.used,
-          },
-          { onConflict: "user_id,benefit_id" },
-        )
-        .select("id, benefit_id, remind_me, used")
-        .single();
+      const { data: savedRow, error: updateError } = await persistRemindMePreference({
+        supabase,
+        userId,
+        benefit,
+        nextValue,
+      });
 
       if (updateError) {
         const errorDetails = describeSupabaseError(updateError);
@@ -918,45 +648,46 @@ export function BenefitsOnboarding() {
         ...prev,
         user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
         remind_me: savedRow?.remind_me ?? nextValue,
-        used: savedRow?.used ?? prev.used,
+        current_period_used: prev.current_period_used,
       }));
     },
     [supabase, updateBenefitLocal, userId],
   );
 
-  const updateUsed = useCallback(
+  const updateCurrentPeriodUsed = useCallback(
     async (benefit: BenefitRow, nextUsed: boolean) => {
       if (!userId) return;
       const nextRemindMe = nextUsed ? false : benefit.remind_me;
 
-      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: nextUsed, remind_me: nextRemindMe }));
+      updateBenefitLocal(benefit.id, (prev) => ({ ...prev, current_period_used: nextUsed, remind_me: nextRemindMe }));
 
-      const { data: savedRow, error: upsertError } = await supabase
-        .from("user_benefits")
-        .upsert(
-          {
-            user_id: userId,
-            benefit_id: benefit.id,
-            used: nextUsed,
-            remind_me: nextRemindMe,
-          },
-          { onConflict: "user_id,benefit_id" },
-        )
-        .select("id, benefit_id, remind_me, used")
-        .single();
+      const {
+        savedRow,
+        error: upsertError,
+        nextRemindMe: persistedNextRemindMe,
+      } = await persistCurrentPeriodUsedPreference({
+        supabase,
+        userId,
+        benefit,
+        nextUsed,
+      });
 
       if (upsertError) {
         const errorDetails = describeSupabaseError(upsertError);
         console.error("Failed to update used status", errorDetails);
-        updateBenefitLocal(benefit.id, (prev) => ({ ...prev, used: !nextUsed, remind_me: benefit.remind_me }));
+        updateBenefitLocal(benefit.id, (prev) => ({
+          ...prev,
+          current_period_used: !nextUsed,
+          remind_me: benefit.remind_me,
+        }));
         return;
       }
 
       updateBenefitLocal(benefit.id, (prev) => ({
         ...prev,
         user_benefit_id: savedRow?.id ?? prev.user_benefit_id,
-        used: savedRow?.used ?? nextUsed,
-        remind_me: savedRow?.remind_me ?? nextRemindMe,
+        current_period_used: nextUsed,
+        remind_me: savedRow?.remind_me ?? persistedNextRemindMe,
       }));
     },
     [supabase, updateBenefitLocal, userId],
@@ -991,13 +722,10 @@ export function BenefitsOnboarding() {
   }, []);
 
   const activeCard = useMemo(
-    () => cards.find((card) => card.cardId === expandedCardId && !removedCardIds.includes(card.cardId)) ?? null,
-    [cards, expandedCardId, removedCardIds],
+    () => cards.find((card) => card.cardId === expandedCardId) ?? null,
+    [cards, expandedCardId],
   );
-  const activeCards = useMemo(
-    () => cards.filter((card) => !removedCardIds.includes(card.cardId)),
-    [cards, removedCardIds],
-  );
+  const activeCards = cards;
   const hasActiveCards = activeCards.length > 0;
 
   const handleRequestRemove = useCallback((card: CardGroup) => {
@@ -1088,27 +816,21 @@ export function BenefitsOnboarding() {
     });
     setRemoveTargetCard(null);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    try {
+      const removeResult = await removeWalletCard({
+        supabase,
+        cardId: removeTargetCard.cardId,
+      });
 
-    if (authError || !user) {
-      rollback();
-      setRemoveCardError("Could not verify your account. Please try again.");
-      showRemoveToast("Failed to remove card. Try again.");
-      setIsRemovingCard(false);
-      return;
-    }
-
-    const { error: deleteError } = await supabase
-      .from("user_cards")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("card_id", removeTargetCard.cardId);
-
-    if (deleteError) {
-      console.error("Failed to remove card from wallet", describeSupabaseError(deleteError));
+      if (!removeResult.ok) {
+        rollback();
+        setRemoveCardError(removeResult.userMessage);
+        showRemoveToast("Failed to remove card. Try again.");
+        setIsRemovingCard(false);
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to remove card from wallet", describeSupabaseError(error));
       rollback();
       setRemoveCardError("Could not remove this card right now. Please try again.");
       showRemoveToast("Failed to remove card. Try again.");
@@ -1127,44 +849,22 @@ export function BenefitsOnboarding() {
     setIsCompleting(true);
 
     try {
-      let resolvedUserId = userId;
-      if (!resolvedUserId) {
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+      const result = await persistBenefitPreferencesOnComplete({
+        supabase,
+        userId,
+        cards: activeCards,
+      });
 
-        if (authError || !user) {
-          setCompleteError("Could not verify your account. Please try again.");
-          return;
-        }
-
-        resolvedUserId = user.id;
-        setUserId(user.id);
+      if (!result.ok) {
+        setCompleteError(result.userMessage);
+        return;
       }
 
-      const preferenceRows = activeCards.flatMap((card) =>
-        card.benefits.map((benefit) => ({
-          user_id: resolvedUserId,
-          benefit_id: benefit.id,
-          remind_me: benefit.remind_me,
-          used: benefit.used,
-        })),
-      );
-
-      if (preferenceRows.length > 0) {
-        const { error: saveError } = await supabase.from("user_benefits").upsert(preferenceRows, {
-          onConflict: "user_id,benefit_id",
-        });
-
-        if (saveError) {
-          console.error("Failed to persist benefit preferences on complete", describeSupabaseError(saveError));
-          setCompleteError("Could not save your preferences right now. Please try again.");
-          return;
-        }
-      }
-
+      setUserId(result.userId);
       router.push("/onboarding/success");
+    } catch (error) {
+      console.error("Failed to persist benefit preferences on complete", describeSupabaseError(error));
+      setCompleteError("Could not save your preferences right now. Please try again.");
     } finally {
       setIsCompleting(false);
     }
@@ -1205,15 +905,19 @@ export function BenefitsOnboarding() {
       <MobilePageContainer className="px-2 md:px-0">
         <div className="w-full min-w-0">
         <div className="mb-6 min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
+          {!isDashboardVariant ? (
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">Step 2 of 2 · Benefits Setup</p>
+          ) : null}
           <div className="mt-2 flex items-start gap-3">
             <span className="mt-1 h-8 w-1 rounded-full bg-[#F7C948]" aria-hidden />
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white transition md:text-4xl motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0">
-                Fine-Tune Your Benefits
+                {isDashboardVariant ? "Your Benefits" : "Fine-Tune Your Benefits"}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/70 transition md:text-base motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:translate-y-1 motion-safe:starting:opacity-0">
-                Turn on reminders for the benefits you want to keep top of mind.
+                {isDashboardVariant
+                  ? "Review your current benefits, mark what you’ve used, and update reminders anytime."
+                  : "Turn on reminders for the benefits you want to keep top of mind."}
               </p>
             </div>
           </div>
@@ -1221,13 +925,15 @@ export function BenefitsOnboarding() {
             className="mx-auto mt-4 h-px w-3/4 bg-gradient-to-r from-transparent via-[#F7C948]/60 to-transparent blur-[0.5px]"
             aria-hidden
           />
-          <button
-            type="button"
-            onClick={() => router.push("/onboarding/build-your-lineup")}
-            className="mt-3 inline-flex items-center rounded-lg px-2 py-1 text-sm text-white/60 transition hover:text-white/85 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220]"
-          >
-            ← Back to Wallet Builder
-          </button>
+          {!isDashboardVariant ? (
+            <button
+              type="button"
+              onClick={() => router.push("/onboarding/build-your-lineup")}
+              className="mt-3 inline-flex items-center rounded-lg px-2 py-1 text-sm text-white/60 transition hover:text-white/85 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7C948]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220]"
+            >
+              ← Back to Wallet Builder
+            </button>
+          ) : null}
         </div>
 
         <div className="space-y-4 pb-28 md:pb-0">
@@ -1244,15 +950,13 @@ export function BenefitsOnboarding() {
                     <CardPanel
                       key={card.cardId}
                       card={card}
-                      isRemoved={removedCardIds.includes(card.cardId)}
-                      removedCardName={removedCardNamesById[card.cardId] ?? null}
                       isExpanded={expandedCardId === card.cardId}
                       activeCadence={activeCadence}
                       onToggleExpand={handleToggleExpand}
                       onCadenceChange={handleCadenceChange}
                       onTabKeyDown={handleTabKeyDown}
                       onToggleRemindMe={updateRemindMe}
-                      onToggleUsed={updateUsed}
+                      onToggleCurrentPeriodUsed={updateCurrentPeriodUsed}
                       onRequestRemove={handleRequestRemove}
                     />
                   );
@@ -1261,25 +965,31 @@ export function BenefitsOnboarding() {
             </Profiler>
           )}
 
-          {completeError ? <p className="text-right text-xs text-[#F4B4B4]">{completeError}</p> : null}
+          {!isDashboardVariant ? (
+            <>
+              {completeError ? <p className="text-right text-xs text-[#F4B4B4]">{completeError}</p> : null}
 
-          <div className="sticky bottom-3 z-30 hidden items-center justify-end md:flex">
-            <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting}>
-              {isCompleting ? "Saving..." : "Complete"}
-            </Button>
-          </div>
+              <div className="sticky bottom-3 z-30 hidden items-center justify-end md:flex">
+                <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting}>
+                  {isCompleting ? "Saving..." : "Complete"}
+                </Button>
+              </div>
+            </>
+          ) : null}
 
           {activeCard ? <p className="text-center text-xs text-white/45">Currently editing: {activeCard.cardName}</p> : null}
         </div>
         </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-4 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
-        <div className="mx-auto w-full max-w-6xl">
-          <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting} className="w-full">
-            {isCompleting ? "Saving..." : "Complete"}
-          </Button>
+      {!isDashboardVariant ? (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#0B1220]/75 px-4 py-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+          <div className="mx-auto w-full max-w-6xl">
+            <Button onClick={() => void handleComplete()} disabled={!hasActiveCards || isCompleting} className="w-full">
+              {isCompleting ? "Saving..." : "Complete"}
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {removeToast ? (
         <div className="pointer-events-none fixed left-1/2 top-4 z-[80] -translate-x-1/2 rounded-lg border border-white/15 bg-[#0F172A]/90 px-3 py-2 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
