@@ -40,3 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 data/previews/
+amex_cards_and_benefits.csv
+amex_consumer_platinum_export.csv
