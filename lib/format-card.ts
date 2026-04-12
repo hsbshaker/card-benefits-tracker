@@ -10,6 +10,7 @@ const ISSUER_FULL_NAME: Record<string, string> = {
   "american express": "American Express",
   chase: "Chase",
   citi: "Citi",
+  capital_one: "Capital One",
   "capital-one": "Capital One",
   "capital one": "Capital One",
   discover: "Discover",
@@ -45,7 +46,7 @@ export function getIssuerDisplayName(rawIssuer: string): string {
 export function getIssuerShortLabel(rawIssuer: string): string {
   const key = rawIssuer.trim().toLowerCase();
   if (key === "amex" || key === "american express") return "AMEX";
-  if (key === "capital one" || key === "capitalone" || key === "capital-one") return "Capital One";
+  if (key === "capital one" || key === "capitalone" || key === "capital-one" || key === "capital_one") return "Capital One";
   if (key === "chase") return "Chase";
   if (key === "citi") return "Citi";
   return rawIssuer.trim();
