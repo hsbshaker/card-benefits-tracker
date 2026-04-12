@@ -111,7 +111,7 @@ export function BenefitActionOverlay({
 
               <div className="mt-8 flex flex-col gap-3">
                 <Button size="lg" onClick={() => onMarkUsed(item)} disabled={loading}>
-                  {loading ? "Saving..." : "Mark as used"}
+                  {loading ? "Saving..." : "Mark used"}
                 </Button>
                 <Link href="/wallet" className="block">
                   <Button variant="secondary" size="lg" className="w-full">

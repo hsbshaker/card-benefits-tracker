@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
-type TabId = "wallet" | "home" | "reminders";
+type TabId = "wallet" | "home" | "settings";
 
 type Tab = {
   id: TabId;
@@ -17,7 +17,7 @@ type Tab = {
 const tabs: Tab[] = [
   { id: "home", label: "Home", href: "/home", comingSoon: false },
   { id: "wallet", label: "Wallet", href: "/wallet", comingSoon: false },
-  { id: "reminders", label: "Personalize Reminders", href: "/onboarding/benefits", comingSoon: false },
+  { id: "settings", label: "Settings", href: "/settings", comingSoon: false },
 ];
 
 export function AppHeader() {
@@ -31,13 +31,13 @@ export function AppHeader() {
   const activeTab = useMemo<TabId | null>(() => {
     if (pathname.startsWith("/home")) return "home";
     if (pathname.startsWith("/wallet")) return "wallet";
-    if (pathname.startsWith("/onboarding/benefits") || pathname.startsWith("/benefits")) return "reminders";
+    if (pathname.startsWith("/settings")) return "settings";
     return null;
   }, [pathname]);
 
   const mobilePageTitle = useMemo(() => {
     if (activeTab === "wallet") return "Wallet";
-    if (activeTab === "reminders") return "Personalize Reminders";
+    if (activeTab === "settings") return "Settings";
     if (activeTab === "home") return "Home";
     return "Memento";
   }, [activeTab]);

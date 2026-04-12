@@ -162,7 +162,7 @@ export function BenefitDetailOverlay({
                   {benefit.isActive ? "Deactivate benefit" : "Activate benefit"}
                 </Button>
                 <Button size="lg" disabled={saving} onClick={() => onToggleUsed(benefit)}>
-                  {benefit.isUsedThisPeriod ? "Unmark used" : "Mark as used"}
+                  {benefit.isUsedThisPeriod ? "Unmark used" : "Mark used"}
                 </Button>
                 <Button variant="secondary" size="lg" disabled={saving} onClick={onClose}>
                   Done

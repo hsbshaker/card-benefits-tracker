@@ -151,6 +151,16 @@ do $$
 begin
   if exists (
     select 1
+    from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'cards'
+      and indexname = 'cards_issuer_card_name_ci_unique'
+  ) then
+    drop index public.cards_issuer_card_name_ci_unique;
+  end if;
+
+  if exists (
+    select 1
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'cards'
@@ -160,10 +170,10 @@ begin
     alter table public.cards
       alter column issuer drop not null;
 
-    alter table public.cards
+      alter table public.cards
       alter column issuer type public.issuer_enum
       using (
-        case lower(trim(issuer::text))
+        case lower((issuer)::text)
           when 'amex' then 'amex'::public.issuer_enum
           when 'american express' then 'amex'::public.issuer_enum
           when 'capital one' then 'capital_one'::public.issuer_enum
@@ -176,6 +186,9 @@ begin
       );
   end if;
 end $$;
+
+create unique index if not exists cards_issuer_card_name_ci_unique
+  on public.cards (issuer, lower(trim(card_name)));
 
 create index if not exists cards_card_code_idx on public.cards (card_code);
 create index if not exists cards_card_status_idx on public.cards (card_status);
@@ -208,7 +221,7 @@ where enrollment_required is null;
 
 update public.benefits
 set cadence = 'semiannual'
-where cadence in ('semi_annual', 'semiannual');
+where cadence::text in ('semi_annual', 'semiannual');
 
 alter table public.benefits
   alter column cadence drop default,

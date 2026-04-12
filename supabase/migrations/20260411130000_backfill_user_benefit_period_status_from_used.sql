@@ -8,10 +8,10 @@ source_rows as (
     ub.user_id,
     ub.benefit_id,
     case
-      when b.cadence = 'monthly' then to_char(c.now_utc, 'YYYY-MM')
-      when b.cadence = 'quarterly' then to_char(c.now_utc, 'YYYY') || '-Q' || (((extract(month from c.now_utc)::int - 1) / 3) + 1)
-      when b.cadence in ('semi_annual', 'semiannual') then to_char(c.now_utc, 'YYYY') || '-H' || (case when extract(month from c.now_utc)::int <= 6 then 1 else 2 end)
-      when b.cadence = 'annual' then to_char(c.now_utc, 'YYYY')
+      when b.cadence::text = 'monthly' then to_char(c.now_utc, 'YYYY-MM')
+      when b.cadence::text = 'quarterly' then to_char(c.now_utc, 'YYYY') || '-Q' || (((extract(month from c.now_utc)::int - 1) / 3) + 1)
+      when b.cadence::text in ('semi_annual', 'semiannual') then to_char(c.now_utc, 'YYYY') || '-H' || (case when extract(month from c.now_utc)::int <= 6 then 1 else 2 end)
+      when b.cadence::text = 'annual' then to_char(c.now_utc, 'YYYY')
       else null
     end as period_key,
     c.now_utc as used_at
@@ -19,7 +19,7 @@ source_rows as (
   join public.benefits b on b.id = ub.benefit_id
   cross join current_utc c
   where ub.used = true
-    and b.cadence in ('monthly', 'quarterly', 'semi_annual', 'semiannual', 'annual')
+    and b.cadence::text in ('monthly', 'quarterly', 'semi_annual', 'semiannual', 'annual')
 )
 insert into public.user_benefit_period_status (
   user_id,
